@@ -1,0 +1,68 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f6f7f4;
+  --foreground: #14201a;
+  --surface: #ffffff;
+  --muted: #5c6a62;
+  --border: #e1e6df;
+  --brand: #1c6b41;
+  --brand-strong: #14532f;
+  --brand-soft: #e5f1e9;
+  --danger: #b42318;
+  --warn: #9a5b0a;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0d1410;
+    --foreground: #e8efe9;
+    --surface: #151d18;
+    --muted: #93a39a;
+    --border: #26322b;
+    --brand: #3fae73;
+    --brand-strong: #5cc58c;
+    --brand-soft: #14281d;
+    --danger: #f97066;
+    --warn: #f0a94a;
+  }
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-brand: var(--brand);
+  --color-brand-strong: var(--brand-strong);
+  --color-brand-soft: var(--brand-soft);
+  --color-danger: var(--danger);
+  --color-warn: var(--warn);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Alvos de toque confortáveis no celular e sem zoom automático em campos no iOS */
+input,
+select,
+textarea {
+  font-size: 16px;
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: #fff;
+    color: #000;
+  }
+}
