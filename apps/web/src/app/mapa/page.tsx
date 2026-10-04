@@ -5,6 +5,7 @@ import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useLiveQuery } from "dexie-react-hooks";
 import { Download, Navigation } from "lucide-react";
+import { TONE, toneOf, type Tone } from "@/components/map-bits";
 import { Button, Card, Empty, LinkButton, PageTitle, SectionTitle } from "@/components/ui";
 import { alive, db } from "@/lib/db";
 import { formatDate, todayISO } from "@/lib/format";
@@ -12,25 +13,9 @@ import { center, mapsLink, polygonAreaHa, projectShapes, toKml, type LngLat } fr
 import { formatNumberBR } from "@/lib/operations";
 import { buildPanel, type Alert, type PlotStatus } from "@/lib/panel";
 
-type Tone = "danger" | "warn" | "ok" | "none";
-
-const TONE: Record<Tone, { shape: string; dot: string; label: string }> = {
-  danger: { shape: "fill-danger/30 stroke-danger", dot: "bg-danger", label: "Atrasado (retorno ou operação)" },
-  warn: { shape: "fill-warn/30 stroke-warn", dot: "bg-warn", label: "Sem visita recente ou retorno hoje" },
-  ok: { shape: "fill-brand/30 stroke-brand", dot: "bg-brand", label: "Em dia" },
-  none: { shape: "fill-muted/15 stroke-muted", dot: "bg-muted", label: "Sem safra cadastrada" },
-};
-
 // Quadro menor = texto maior quando o SVG encolhe na tela do celular.
 const W = 600;
 const H = 390;
-
-function toneOf(status: PlotStatus, alerts: Alert[]): Tone {
-  const mine = alerts.filter((a) => a.plotId === status.plot.id);
-  if (mine.some((a) => a.kind === "followup-overdue" || a.kind === "operation-late")) return "danger";
-  if (mine.length) return "warn";
-  return status.season ? "ok" : "none";
-}
 
 function saveFile(text: string, name: string, type: string) {
   const url = URL.createObjectURL(new Blob([text], { type }));

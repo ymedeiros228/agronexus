@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState, type ReactNode } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { CircleDollarSign, LandPlot, Tractor, TrendingUp, type LucideIcon } from "lucide-react";
+import { MiniMap, hasShape } from "@/components/map-bits";
 import { OperationRow } from "@/components/operation-row";
 import { VisitRow } from "@/components/visit-row";
 import { Card, Chip, Empty, LinkButton, PageTitle, SectionTitle } from "@/components/ui";
@@ -130,6 +131,7 @@ export default function Home() {
   const stats = label ? seasonStats(label, data.seasons, data.plots, data.operations, today) : null;
   const money = label && stats ? seasonFinance(label, stats, data.sales, data.expenses) : null;
   const yields = label ? yieldByPlot(label, data.seasons, data.operations) : [];
+  const mapFarm = panel.farms.find((f) => f.plots.some(hasShape));
 
   if (data.farms.length === 0) {
     return (
@@ -287,6 +289,22 @@ export default function Home() {
         </div>
 
         <aside className="space-y-6">
+          {mapFarm ? (
+            <section className="space-y-3">
+              <div className="flex items-center justify-between">
+                <SectionTitle>Mapa · {mapFarm.farm.name}</SectionTitle>
+                <Link href={`/mapa?fazenda=${mapFarm.farm.id}`} className="text-sm font-medium text-brand">
+                  Abrir
+                </Link>
+              </div>
+              <Link href={`/mapa?fazenda=${mapFarm.farm.id}`} className="block">
+                <Card className="p-2 transition hover:border-brand/40">
+                  <MiniMap statuses={mapFarm.plots} alerts={panel.alerts} />
+                </Card>
+              </Link>
+            </section>
+          ) : null}
+
           <section className="space-y-3">
             <div className="flex items-center justify-between">
               <SectionTitle>Operações recentes</SectionTitle>
