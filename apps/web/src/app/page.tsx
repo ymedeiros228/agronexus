@@ -12,6 +12,10 @@ import { alive, db, getMeta, type OperationKind } from "@/lib/db";
 import { formatDate, todayISO } from "@/lib/format";
 import { KIND_NAME, formatBRL, formatNumberBR, seasonLabels, seasonStats, yieldByPlot } from "@/lib/operations";
 import { NO_VISIT_ALERT_DAYS, buildPanel, type FarmStatus, type PlotStatus } from "@/lib/panel";
+import { stockAlerts, stockOf, usesByOperation } from "@/lib/stock";
+
+/** Item do "Pede atenção": talhão (visita, retorno, operação) ou estoque. */
+type Attention = { key: string; title: string; sub: string; text: string; href: string; danger: boolean; weight: number };
 
 /** Depois de quanto tempo sem backup o aviso aparece. */
 const BACKUP_NAG_MS = 3 * 86_400_000;
@@ -31,7 +35,7 @@ export default function Home() {
   const [chosenLabel, setChosenLabel] = useState<string>();
 
   const data = useLiveQuery(async () => {
-    const [farms, plots, seasons, visits, findings, rainfall, operations, lastBackupAt] = await Promise.all([
+    const [farms, plots, seasons, visits, findings, rainfall, operations, supplies, moves, lastBackupAt] = await Promise.all([
       db.farms.toArray(),
       db.plots.toArray(),
       db.seasons.toArray(),
@@ -39,6 +43,8 @@ export default function Home() {
       db.findings.toArray(),
       db.rainfall.toArray(),
       db.operations.toArray(),
+      db.supplies.toArray(),
+      db.stockMoves.toArray(),
       getMeta<number>(LAST_BACKUP_KEY),
     ]);
     const today = todayISO();
@@ -48,8 +54,10 @@ export default function Home() {
     const live = alive(visits).filter((v) => plotIds.has(v.plotId));
     const liveOps = alive(operations).filter((o) => plotIds.has(o.plotId));
     const liveSeasons = alive(seasons).filter((s) => plotIds.has(s.plotId));
+    const liveSupplies = alive(supplies);
+    const liveMoves = alive(moves);
     const since = lastBackupAt ?? 0;
-    const changed = [...live, ...liveOps].filter((r) => r.updatedAt > since).length;
+    const changed = [...live, ...liveOps, ...liveSupplies, ...liveMoves].filter((r) => r.updatedAt > since).length;
     const panel = buildPanel(
       {
         farms: liveFarms,
@@ -66,6 +74,26 @@ export default function Home() {
       .filter((v) => v.followUpDate && !v.followUpDone && v.followUpDate > today)
       .sort((a, b) => (a.followUpDate! < b.followUpDate! ? -1 : 1));
     const recentOps = [...liveOps].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 5);
+    const attention: Attention[] = [
+      ...panel.alerts.map((a) => ({
+        key: `${a.kind}-${a.href}`,
+        title: a.farmName,
+        sub: `Talhão ${a.plotName}`,
+        text: a.text,
+        href: a.href,
+        danger: a.kind === "followup-overdue" || a.kind === "operation-late",
+        weight: a.weight,
+      })),
+      ...stockAlerts(stockOf(liveSupplies, liveMoves, alive(operations))).map((a) => ({
+        key: `${a.kind}-${a.href}`,
+        title: "Estoque",
+        sub: a.title,
+        text: a.text,
+        href: a.href,
+        danger: a.kind !== "stock-low",
+        weight: a.weight,
+      })),
+    ].sort((a, b) => b.weight - a.weight);
     return {
       today,
       farms: liveFarms,
@@ -75,6 +103,8 @@ export default function Home() {
       operations: liveOps,
       unsaved: Date.now() - since > BACKUP_NAG_MS ? changed : 0,
       panel,
+      attention,
+      uses: usesByOperation(liveMoves, liveSupplies),
       upcoming,
       recentOps,
     };
@@ -185,21 +215,16 @@ export default function Home() {
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
-          {panel.alerts.length > 0 ? (
+          {data.attention.length > 0 ? (
             <section className="space-y-3">
               <SectionTitle>Pede atenção</SectionTitle>
               <Card className="divide-y divide-border p-0">
-                {panel.alerts.map((a) => (
-                  <Link key={`${a.kind}-${a.href}`} href={a.href} className="flex items-center gap-3 p-4 active:bg-brand-soft">
-                    <span
-                      aria-hidden
-                      className={`size-2.5 shrink-0 rounded-full ${
-                        a.kind === "followup-overdue" || a.kind === "operation-late" ? "bg-danger" : "bg-warn"
-                      }`}
-                    />
+                {data.attention.map((a) => (
+                  <Link key={a.key} href={a.href} className="flex items-center gap-3 p-4 active:bg-brand-soft">
+                    <span aria-hidden className={`size-2.5 shrink-0 rounded-full ${a.danger ? "bg-danger" : "bg-warn"}`} />
                     <span className="min-w-0 flex-1">
                       <span className="block truncate font-medium">
-                        {a.farmName} <span className="text-muted">· Talhão {a.plotName}</span>
+                        {a.title} <span className="text-muted">· {a.sub}</span>
                       </span>
                       <span className="block text-sm text-muted">{a.text}</span>
                     </span>
@@ -261,6 +286,7 @@ export default function Home() {
                   today={today}
                   farmName={farmName.get(o.farmId) ?? "Fazenda"}
                   plotName={plotName.get(o.plotId) ?? "?"}
+                  uses={data.uses.get(o.id)}
                 />
               ))
             )}

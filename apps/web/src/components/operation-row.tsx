@@ -6,18 +6,21 @@ import { OperationIcon, StatusPill } from "@/components/operation-bits";
 import type { Operation } from "@/lib/db";
 import { formatDate } from "@/lib/format";
 import { KIND_NAME, completeOperation, formatBRL, formatNumberBR, isLate } from "@/lib/operations";
+import { formatQty, type Use } from "@/lib/stock";
 
 export function OperationRow({
   op,
   farmName,
   plotName,
   today,
+  uses = [],
   highlight = false,
 }: {
   op: Operation;
   farmName: string;
   plotName: string;
   today: string;
+  uses?: Use[];
   highlight?: boolean;
 }) {
   const late = isLate(op, today);
@@ -48,6 +51,15 @@ export function OperationRow({
           <span className="min-w-0">{meta.join(" · ")}</span>
         </span>
         {op.description ? <span className="mt-1.5 line-clamp-2 block text-sm">{op.description}</span> : null}
+        {uses.length ? (
+          <span className="mt-1.5 flex flex-wrap gap-1.5">
+            {uses.map((u, i) => (
+              <span key={`${u.supplyId}-${i}`} className="rounded-full bg-border/60 px-2.5 py-0.5 text-xs text-muted">
+                {u.name} · {formatQty(u.qty, u.unit)}
+              </span>
+            ))}
+          </span>
+        ) : null}
       </Link>
       {op.status !== "concluida" ? (
         <button

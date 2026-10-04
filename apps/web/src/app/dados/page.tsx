@@ -4,7 +4,7 @@ import { useEffect, useState, type ChangeEvent } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { Button, Card, PageTitle, SectionTitle } from "@/components/ui";
 import { LAST_BACKUP_KEY, countLocalRecords, exportBackup, importBackup, markBackupDone } from "@/lib/backup";
-import { exportVisitsCsv } from "@/lib/csv";
+import { exportOperationsCsv, exportStockCsv, exportVisitsCsv } from "@/lib/csv";
 import { getMeta } from "@/lib/db";
 import { todayISO } from "@/lib/format";
 
@@ -65,10 +65,11 @@ export default function DataPage() {
     }
   }
 
-  async function downloadCsv() {
+  async function downloadCsv(kind: "visitas" | "operacoes" | "estoque") {
     setBusy(true);
     try {
-      saveFile(await exportVisitsCsv(), `agronexus-visitas-${todayISO()}.csv`);
+      const make = { visitas: exportVisitsCsv, operacoes: exportOperationsCsv, estoque: exportStockCsv }[kind];
+      saveFile(await make(), `agronexus-${kind}-${todayISO()}.csv`);
       setMessage({ tone: "ok", text: "Planilha gerada. Abre no Excel ou no Google Planilhas." });
     } catch {
       setMessage({ tone: "error", text: "Não foi possível gerar a planilha." });
@@ -103,7 +104,7 @@ export default function DataPage() {
       <PageTitle title="Dados" subtitle="Seus registros ficam só neste aparelho. Faça backup com frequência." />
 
       {counts ? (
-        <Card className="grid grid-cols-3 gap-3 text-center">
+        <Card className="grid grid-cols-4 gap-x-2 gap-y-3 text-center">
           {[
             ["Fazendas", counts.farms],
             ["Talhões", counts.plots],
@@ -111,10 +112,12 @@ export default function DataPage() {
             ["Fotos", counts.photos],
             ["Operações", counts.operations],
             ["Chuvas", counts.rainfall],
+            ["Insumos", counts.supplies],
+            ["Lançamentos", counts.stockMoves],
           ].map(([label, n]) => (
-            <div key={label}>
+            <div key={label} className="min-w-0">
               <p className="text-2xl font-semibold">{n}</p>
-              <p className="text-xs text-muted">{label}</p>
+              <p className="truncate text-xs text-muted">{label}</p>
             </div>
           ))}
         </Card>
@@ -124,7 +127,8 @@ export default function DataPage() {
         <SectionTitle>Backup</SectionTitle>
         <Card className="space-y-3">
           <p className="text-sm text-muted">
-            Gera um arquivo com tudo: fazendas, visitas e fotos. Restaurar nunca apaga nada, só acrescenta o que falta.
+            Gera um arquivo com tudo: fazendas, visitas, fotos, operações e estoque. Restaurar nunca apaga nada, só
+            acrescenta o que falta.
           </p>
           {lastBackupAt !== undefined ? (
             <p className="text-sm">
@@ -144,14 +148,19 @@ export default function DataPage() {
       </section>
 
       <section className="space-y-3">
-        <SectionTitle>Planilha</SectionTitle>
+        <SectionTitle>Planilhas (Excel)</SectionTitle>
         <Card className="space-y-3">
           <p className="text-sm text-muted">
-            Todas as visitas em uma planilha, uma linha por achado. Serve para enviar ao produtor ou à empresa. Não
-            inclui fotos.
+            Para analisar no Excel ou mandar para o contador, o consultor ou a empresa. Não incluem fotos.
           </p>
-          <Button variant="secondary" onClick={downloadCsv} disabled={busy || !counts?.visits} className="w-full">
-            Baixar planilha (Excel)
+          <Button variant="secondary" onClick={() => downloadCsv("operacoes")} disabled={busy || !counts?.operations} className="w-full">
+            Operações (com insumos e custos)
+          </Button>
+          <Button variant="secondary" onClick={() => downloadCsv("estoque")} disabled={busy || !counts?.supplies} className="w-full">
+            Estoque de insumos
+          </Button>
+          <Button variant="secondary" onClick={() => downloadCsv("visitas")} disabled={busy || !counts?.visits} className="w-full">
+            Visitas (uma linha por achado)
           </Button>
         </Card>
       </section>

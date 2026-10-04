@@ -9,6 +9,7 @@ import { Card, Empty, LinkButton, PageTitle, SectionTitle } from "@/components/u
 import { alive, db, type Operation } from "@/lib/db";
 import { todayISO } from "@/lib/format";
 import { isLate } from "@/lib/operations";
+import { usesByOperation } from "@/lib/stock";
 
 type Filter = "abertas" | "concluidas" | "todas";
 
@@ -23,8 +24,20 @@ function Operations() {
   const [filter, setFilter] = useState<Filter>("todas");
 
   const data = useLiveQuery(async () => {
-    const [ops, farms, plots] = await Promise.all([db.operations.toArray(), db.farms.toArray(), db.plots.toArray()]);
-    return { ops: alive(ops), farms: alive(farms), plots: alive(plots), today: todayISO() };
+    const [ops, farms, plots, moves, supplies] = await Promise.all([
+      db.operations.toArray(),
+      db.farms.toArray(),
+      db.plots.toArray(),
+      db.stockMoves.toArray(),
+      db.supplies.toArray(),
+    ]);
+    return {
+      ops: alive(ops),
+      farms: alive(farms),
+      plots: alive(plots),
+      uses: usesByOperation(alive(moves), alive(supplies)),
+      today: todayISO(),
+    };
   });
 
   if (!data) return null;
@@ -103,6 +116,7 @@ function Operations() {
                       today={today}
                       farmName={farmName.get(o.farmId) ?? "Fazenda"}
                       plotName={plotName.get(o.plotId) ?? "?"}
+                      uses={data.uses.get(o.id)}
                       highlight={o.id === highlight}
                     />
                   ))}

@@ -43,8 +43,8 @@ export function formatNumberBR(n: number | null | undefined, digits = 1): string
   return n == null ? "" : n.toLocaleString("pt-BR", { maximumFractionDigits: digits });
 }
 
-export function formatBRL(n: number): string {
-  return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
+export function formatBRL(n: number, digits = 0): string {
+  return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: digits });
 }
 
 /** Planejada com data já passada. */
@@ -80,23 +80,64 @@ async function fillPlantingDate(op: OperationInput, seasonId: string | null) {
   }
 }
 
-export async function saveOperation(input: OperationInput, today: string, id?: string): Promise<string> {
+/** Insumo usado na operação. `moveId` vem preenchido quando o uso já existia (edição). */
+export type UseInput = { moveId?: string; supplyId: string; qty: number };
+
+/**
+ * Grava os usos de insumo da operação (diferença com o que já existia).
+ * Sem `uses`, só acompanha a data da operação.
+ */
+async function syncUses(opId: string, date: string, uses: UseInput[] | undefined) {
+  const existing = alive(await db.stockMoves.where("operationId").equals(opId).toArray()).filter((m) => m.kind === "uso");
+  const now = Date.now();
+  if (!uses) {
+    for (const m of existing) if (m.date !== date) await db.stockMoves.update(m.id, { date, updatedAt: now });
+    return;
+  }
+  const valid = uses.filter((u) => u.supplyId && u.qty > 0);
+  const keep = new Set(valid.map((u) => u.moveId).filter(Boolean));
+  for (const m of existing) if (!keep.has(m.id)) await db.stockMoves.update(m.id, { deletedAt: now, updatedAt: now });
+  for (const u of valid) {
+    const old = u.moveId ? existing.find((m) => m.id === u.moveId) : undefined;
+    if (old) {
+      if (old.qty !== u.qty || old.supplyId !== u.supplyId || old.date !== date) {
+        await db.stockMoves.update(old.id, { qty: u.qty, supplyId: u.supplyId, date, updatedAt: now });
+      }
+    } else {
+      await db.stockMoves.add({
+        ...newBase(),
+        supplyId: u.supplyId,
+        kind: "uso",
+        qty: u.qty,
+        date,
+        cost: null,
+        operationId: opId,
+        note: "",
+      });
+    }
+  }
+}
+
+export async function saveOperation(input: OperationInput, today: string, id?: string, uses?: UseInput[]): Promise<string> {
   const data = clean(input, today);
+  const effectiveDate = data.doneDate ?? data.date;
   if (!id) {
     const op: Operation = { ...newBase(), ...data, seasonId: (await seasonFor(data.plotId))?.id ?? null };
-    await db.transaction("rw", db.operations, db.seasons, async () => {
+    await db.transaction("rw", [db.operations, db.seasons, db.stockMoves], async () => {
       await db.operations.add(op);
       await fillPlantingDate(data, op.seasonId);
+      await syncUses(op.id, effectiveDate, uses);
     });
     return op.id;
   }
   const moved = await seasonFor(data.plotId);
-  await db.transaction("rw", db.operations, db.seasons, async () => {
+  await db.transaction("rw", [db.operations, db.seasons, db.stockMoves], async () => {
     const old = await db.operations.get(id);
     if (!old || old.deletedAt) throw new Error("Operação não encontrada.");
     const seasonId = old.plotId === data.plotId ? old.seasonId : (moved?.id ?? null);
     await db.operations.update(id, { ...data, seasonId, updatedAt: Date.now() });
     await fillPlantingDate(data, seasonId);
+    await syncUses(id, effectiveDate, uses);
   });
   return id;
 }

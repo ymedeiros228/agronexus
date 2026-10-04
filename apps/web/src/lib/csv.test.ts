@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { csvCell, toCsv, visitRows } from "./csv";
-import type { Farm, Finding, Plot, Season, Visit } from "./db";
+import { csvCell, operationRows, toCsv, visitRows } from "./csv";
+import type { Farm, Finding, Operation, Plot, Season, Visit } from "./db";
 
 const base = (id: string, createdAt = 1) => ({ id, createdAt, updatedAt: createdAt });
 
@@ -70,5 +70,46 @@ describe("visitRows", () => {
     const [row] = visitRows([visit("v3", "2026-11-01")], farms, plots, seasons, []);
     expect(row[6]).toBe("2026/27");
     expect(row[7]).toBe("Nova");
+  });
+
+  it("operações: data de conclusão, insumos e produtividade com vírgula", () => {
+    const op = (id: string, over: Partial<Operation>): Operation => ({
+      ...base(id),
+      farmId: "f1",
+      plotId: "p1",
+      seasonId: "s-new",
+      kind: "aplicacao",
+      status: "concluida",
+      date: "2027-01-05",
+      doneDate: "2027-01-06",
+      areaHa: 120.5,
+      description: "Fungicida; 2ª aplicação",
+      cost: 18_500.5,
+      yieldBags: null,
+      ...over,
+    });
+    const rows = operationRows(
+      [op("c", { kind: "colheita", date: "2027-03-01", doneDate: "2027-03-02", yieldBags: 7_833, cost: null }), op("a", {}), op("x", { plotId: "removido" })],
+      farms,
+      plots,
+      seasons,
+      new Map([["a", [{ name: "Produto X", qty: 60.25, unit: "L", supplyId: "s" }]]]),
+    );
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toEqual([
+      "06/01/2027",
+      "Boa Esperança",
+      "T-12",
+      "2026/27",
+      "Aplicação",
+      "Concluída",
+      "120,5",
+      "Fungicida; 2ª aplicação",
+      "Produto X 60,25 L",
+      "18500,5",
+      "",
+      "",
+    ]);
+    expect(rows[1][11]).toBe("65"); // 7833 / 120,5
   });
 });

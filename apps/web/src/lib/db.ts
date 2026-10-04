@@ -89,6 +89,45 @@ export type Operation = Base & {
   yieldBags: number | null; // só colheita: sacas de 60 kg colhidas
 };
 
+export type SupplyCategory =
+  | "semente"
+  | "fertilizante"
+  | "corretivo"
+  | "herbicida"
+  | "inseticida"
+  | "fungicida"
+  | "adjuvante"
+  | "biologico"
+  | "combustivel"
+  | "outro";
+
+/** Insumo do estoque, com o nome que o produtor usa. O app não sugere produto. */
+export type Supply = Base & {
+  name: string;
+  category: SupplyCategory;
+  unit: string; // "kg", "L", "sc", "t", "un", "g", "mL"
+  minQty: number | null; // estoque mínimo definido pelo usuário (aviso no painel)
+  notes: string;
+};
+
+/**
+ * Movimento de estoque.
+ * - entrada: compra/recebimento; `cost` é o valor total pago.
+ * - uso: insumo de uma operação; só baixa do saldo quando a operação está concluída.
+ * - ajuste: diferença achada na contagem (pode ser negativa).
+ */
+export type StockMoveKind = "entrada" | "uso" | "ajuste";
+
+export type StockMove = Base & {
+  supplyId: string;
+  kind: StockMoveKind;
+  qty: number;
+  date: string; // AAAA-MM-DD
+  cost: number | null;
+  operationId: string | null;
+  note: string; // fornecedor, nota fiscal, motivo do ajuste
+};
+
 /** Configurações deste aparelho (não vão para o backup). */
 export type Meta = { key: string; value: unknown };
 
@@ -101,6 +140,8 @@ class AgroDB extends Dexie {
   photos!: EntityTable<Photo, "id">;
   rainfall!: EntityTable<Rainfall, "id">;
   operations!: EntityTable<Operation, "id">;
+  supplies!: EntityTable<Supply, "id">;
+  stockMoves!: EntityTable<StockMove, "id">;
   meta!: EntityTable<Meta, "key">;
 
   constructor() {
@@ -137,6 +178,11 @@ class AgroDB extends Dexie {
     // v3: operações agrícolas.
     this.version(3).stores({
       operations: "id, farmId, plotId, seasonId, date, status, updatedAt",
+    });
+    // v4: insumos e movimentos de estoque.
+    this.version(4).stores({
+      supplies: "id, name, category, updatedAt",
+      stockMoves: "id, supplyId, operationId, date, updatedAt",
     });
   }
 }
@@ -185,30 +231,65 @@ export function addSeason(plotId: string, data: Pick<Season, "label" | "cultivar
   return db.seasons.add({ ...newBase(), plotId, ...data });
 }
 
+/** Uso de insumo de operações removidas também sai (dentro de uma transação que inclua stockMoves). */
+async function removeUses(operationIds: string[], mark: ReturnType<typeof gone>) {
+  if (operationIds.length === 0) return;
+  await db.stockMoves.where("operationId").anyOf(operationIds).filter((m) => !m.deletedAt).modify(mark);
+}
+
 /** Remove o talhão com visitas e operações (exclusão lógica). */
 export async function removePlot(id: string) {
   const mark = gone();
-  await db.transaction("rw", [db.plots, db.visits, db.operations], async () => {
+  await db.transaction("rw", [db.plots, db.visits, db.operations, db.stockMoves], async () => {
     await db.plots.update(id, mark);
     await db.visits.where("plotId").equals(id).filter((v) => !v.deletedAt).modify(mark);
-    await db.operations.where("plotId").equals(id).filter((r) => !r.deletedAt).modify(mark);
+    const ops = await db.operations.where("plotId").equals(id).filter((r) => !r.deletedAt).primaryKeys();
+    await db.operations.where("id").anyOf(ops).modify(mark);
+    await removeUses(ops, mark);
   });
 }
 
 /** Remove a fazenda com talhões, visitas, operações e chuvas (exclusão lógica). */
 export async function removeFarm(id: string) {
   const mark = gone();
-  await db.transaction("rw", [db.farms, db.plots, db.visits, db.rainfall, db.operations], async () => {
+  await db.transaction("rw", [db.farms, db.plots, db.visits, db.rainfall, db.operations, db.stockMoves], async () => {
     await db.farms.update(id, mark);
     await db.plots.where("farmId").equals(id).filter((r) => !r.deletedAt).modify(mark);
     await db.visits.where("farmId").equals(id).filter((r) => !r.deletedAt).modify(mark);
     await db.rainfall.where("farmId").equals(id).filter((r) => !r.deletedAt).modify(mark);
-    await db.operations.where("farmId").equals(id).filter((r) => !r.deletedAt).modify(mark);
+    const ops = await db.operations.where("farmId").equals(id).filter((r) => !r.deletedAt).primaryKeys();
+    await db.operations.where("id").anyOf(ops).modify(mark);
+    await removeUses(ops, mark);
   });
 }
 
-export function removeOperation(id: string) {
-  return db.operations.update(id, gone());
+export async function removeOperation(id: string) {
+  const mark = gone();
+  await db.transaction("rw", [db.operations, db.stockMoves], async () => {
+    await db.operations.update(id, mark);
+    await removeUses([id], mark);
+  });
+}
+
+export function removeStockMove(id: string) {
+  return db.stockMoves.update(id, gone());
+}
+
+/**
+ * Remove o insumo e as entradas/ajustes dele. Recusa se ele foi usado em alguma operação,
+ * para não apagar parte do registro da operação.
+ */
+export async function removeSupply(id: string): Promise<{ ok: true } | { ok: false; usedIn: number }> {
+  return db.transaction("rw", [db.supplies, db.stockMoves, db.operations], async () => {
+    const moves = alive(await db.stockMoves.where("supplyId").equals(id).toArray());
+    const opIds = [...new Set(moves.filter((m) => m.kind === "uso" && m.operationId).map((m) => m.operationId!))];
+    const usedIn = alive((await db.operations.bulkGet(opIds)).filter((o): o is Operation => !!o)).length;
+    if (usedIn > 0) return { ok: false, usedIn } as const;
+    const mark = gone();
+    await db.supplies.update(id, mark);
+    await db.stockMoves.where("supplyId").equals(id).filter((m) => !m.deletedAt).modify(mark);
+    return { ok: true } as const;
+  });
 }
 
 export async function getMeta<T>(key: string): Promise<T | undefined> {

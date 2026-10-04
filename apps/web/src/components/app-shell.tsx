@@ -9,6 +9,9 @@ import {
   HardDrive,
   LayoutDashboard,
   MapPinned,
+  Menu,
+  Package,
+  PackagePlus,
   Plus,
   Sprout,
   Tractor,
@@ -19,19 +22,40 @@ import { OnlineBadge } from "./online-badge";
 
 type NavItem = { href: string; label: string; short: string; icon: LucideIcon; match: (p: string) => boolean };
 
-const NAV: NavItem[] = [
-  { href: "/", label: "Painel", short: "Painel", icon: LayoutDashboard, match: (p) => p === "/" },
-  {
-    href: "/fazendas",
-    label: "Fazendas e talhões",
-    short: "Fazendas",
-    icon: MapPinned,
-    match: (p) => p.startsWith("/fazenda") || p.startsWith("/talhao"),
-  },
-  { href: "/operacoes", label: "Operações", short: "Operações", icon: Tractor, match: (p) => p.startsWith("/operac") },
-  { href: "/visitas", label: "Monitoramento", short: "Monitorar", icon: Bug, match: (p) => p.startsWith("/visita") },
-  { href: "/dados", label: "Dados e backup", short: "Dados", icon: HardDrive, match: (p) => p.startsWith("/dados") },
-];
+const PANEL: NavItem = { href: "/", label: "Painel", short: "Painel", icon: LayoutDashboard, match: (p) => p === "/" };
+const FARMS: NavItem = {
+  href: "/fazendas",
+  label: "Fazendas e talhões",
+  short: "Fazendas",
+  icon: MapPinned,
+  match: (p) => p.startsWith("/fazenda") || p.startsWith("/talhao"),
+};
+const OPERATIONS: NavItem = {
+  href: "/operacoes",
+  label: "Operações",
+  short: "Operações",
+  icon: Tractor,
+  match: (p) => p.startsWith("/operac"),
+};
+const SUPPLIES: NavItem = {
+  href: "/insumos",
+  label: "Insumos e estoque",
+  short: "Insumos",
+  icon: Package,
+  match: (p) => p.startsWith("/insumo"),
+};
+const MONITORING: NavItem = {
+  href: "/visitas",
+  label: "Monitoramento",
+  short: "Monitorar",
+  icon: Bug,
+  match: (p) => p.startsWith("/visita"),
+};
+const DATA: NavItem = { href: "/dados", label: "Dados e backup", short: "Dados", icon: HardDrive, match: (p) => p.startsWith("/dados") };
+
+const NAV = [PANEL, FARMS, OPERATIONS, SUPPLIES, MONITORING, DATA];
+/** No celular, o que não cabe na barra inferior fica em "Mais". */
+const MORE = [FARMS, SUPPLIES, DATA];
 
 const NEW_ACTIONS = [
   {
@@ -48,10 +72,17 @@ const NEW_ACTIONS = [
     text: "Plantio, aplicação, adubação, colheita",
     icon: Tractor,
   },
+  {
+    href: "/insumos/movimento?tipo=entrada",
+    label: "Entrada de insumo",
+    short: "Entrada de insumo",
+    text: "Compra ou recebimento no estoque",
+    icon: PackagePlus,
+  },
 ];
 
 /** Telas de painel e listas usam a largura toda no computador; formulários ficam estreitos. */
-const WIDE = ["/", "/operacoes", "/visitas", "/fazendas"];
+const WIDE = ["/", "/operacoes", "/visitas", "/fazendas", "/insumos"];
 
 function Logo({ dark = false }: { dark?: boolean }) {
   return (
@@ -67,11 +98,47 @@ function Logo({ dark = false }: { dark?: boolean }) {
   );
 }
 
+function SheetLink({
+  href,
+  icon: Icon,
+  label,
+  text,
+  active = false,
+  onClick,
+}: {
+  href: string;
+  icon: LucideIcon;
+  label: string;
+  text?: string;
+  active?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <Link
+      href={href}
+      onClick={onClick}
+      aria-current={active ? "page" : undefined}
+      className={`flex items-center gap-3 rounded-2xl border p-4 active:bg-brand-soft ${
+        active ? "border-brand bg-brand-soft" : "border-border"
+      }`}
+    >
+      <span className="grid size-11 place-items-center rounded-xl bg-brand-soft text-brand">
+        <Icon className="size-5" />
+      </span>
+      <span>
+        <span className="block font-medium">{label}</span>
+        {text ? <span className="block text-sm text-muted">{text}</span> : null}
+      </span>
+    </Link>
+  );
+}
+
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const [sheet, setSheet] = useState(false);
+  const [sheet, setSheet] = useState<"novo" | "mais" | null>(null);
   const wide = WIDE.includes(pathname);
-  const mobileNav = [NAV[0], NAV[1], null, NAV[2], NAV[3]];
+  const mobileNav = [PANEL, OPERATIONS, null, MONITORING];
+  const moreActive = MORE.some((m) => m.match(pathname));
 
   return (
     <div className="min-h-dvh md:pl-64 print:pl-0">
@@ -122,18 +189,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       {/* Celular: cabeçalho */}
       <header className="no-print sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-border bg-background/85 px-4 py-3 backdrop-blur md:hidden">
         <Logo />
-        <div className="flex items-center gap-2">
-          <OnlineBadge />
-          <Link
-            href="/dados"
-            aria-label="Dados e backup"
-            className={`grid size-10 place-items-center rounded-full ${
-              pathname.startsWith("/dados") ? "bg-brand-soft text-brand-strong" : "text-muted"
-            }`}
-          >
-            <HardDrive className="size-5" />
-          </Link>
-        </div>
+        <OnlineBadge />
       </header>
 
       <main
@@ -156,7 +212,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 <li key="novo" className="flex justify-center">
                   <button
                     type="button"
-                    onClick={() => setSheet(true)}
+                    onClick={() => setSheet("novo")}
                     aria-label="Registrar"
                     aria-haspopup="dialog"
                     className="-mt-6 grid size-14 place-items-center rounded-full bg-brand text-white shadow-lg ring-4 ring-background active:scale-95"
@@ -183,38 +239,51 @@ export function AppShell({ children }: { children: ReactNode }) {
               </li>
             );
           })}
+          <li>
+            <button
+              type="button"
+              onClick={() => setSheet("mais")}
+              aria-haspopup="dialog"
+              className={`flex min-h-12 w-full flex-col items-center justify-center gap-0.5 rounded-xl text-[11px] font-medium ${
+                moreActive ? "text-brand" : "text-muted"
+              }`}
+            >
+              <Menu className="size-[22px]" strokeWidth={moreActive ? 2.4 : 2} />
+              Mais
+            </button>
+          </li>
         </ul>
       </nav>
 
       {sheet ? (
-        <div className="no-print fixed inset-0 z-30 md:hidden" role="dialog" aria-modal="true" aria-label="Registrar">
-          <button type="button" aria-label="Fechar" className="absolute inset-0 bg-black/40" onClick={() => setSheet(false)} />
+        <div
+          className="no-print fixed inset-0 z-30 md:hidden"
+          role="dialog"
+          aria-modal="true"
+          aria-label={sheet === "novo" ? "Registrar" : "Mais"}
+        >
+          <button type="button" aria-label="Fechar" className="absolute inset-0 bg-black/40" onClick={() => setSheet(null)} />
           <div className="absolute inset-x-0 bottom-0 space-y-3 rounded-t-3xl bg-surface p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-2xl">
             <div className="flex items-center justify-between">
-              <p className="font-semibold">O que você quer registrar?</p>
-              <button type="button" onClick={() => setSheet(false)} aria-label="Fechar" className="grid size-10 place-items-center rounded-full text-muted">
+              <p className="font-semibold">{sheet === "novo" ? "O que você quer registrar?" : "Mais"}</p>
+              <button type="button" onClick={() => setSheet(null)} aria-label="Fechar" className="grid size-10 place-items-center rounded-full text-muted">
                 <X className="size-5" />
               </button>
             </div>
-            {NEW_ACTIONS.map((a) => {
-              const Icon = a.icon;
-              return (
-                <Link
-                  key={a.href}
-                  href={a.href}
-                  onClick={() => setSheet(false)}
-                  className="flex items-center gap-3 rounded-2xl border border-border p-4 active:bg-brand-soft"
-                >
-                  <span className="grid size-11 place-items-center rounded-xl bg-brand-soft text-brand">
-                    <Icon className="size-5" />
-                  </span>
-                  <span>
-                    <span className="block font-medium">{a.label}</span>
-                    <span className="block text-sm text-muted">{a.text}</span>
-                  </span>
-                </Link>
-              );
-            })}
+            {sheet === "novo"
+              ? NEW_ACTIONS.map((a) => (
+                  <SheetLink key={a.href} href={a.href} icon={a.icon} label={a.label} text={a.text} onClick={() => setSheet(null)} />
+                ))
+              : MORE.map((m) => (
+                  <SheetLink
+                    key={m.href}
+                    href={m.href}
+                    icon={m.icon}
+                    label={m.label}
+                    active={m.match(pathname)}
+                    onClick={() => setSheet(null)}
+                  />
+                ))}
           </div>
         </div>
       ) : null}

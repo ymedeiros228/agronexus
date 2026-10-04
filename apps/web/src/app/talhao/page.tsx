@@ -9,6 +9,7 @@ import { OperationRow } from "@/components/operation-row";
 import { KIND_LABEL } from "@/lib/catalog";
 import { addSeason, alive, db, removePlot, updatePlot, updateSeason, type Finding, type Season, type Visit } from "@/lib/db";
 import { formatDate, todayISO } from "@/lib/format";
+import { usesByOperation } from "@/lib/stock";
 import { formatBRL, formatNumberBR, yieldByPlot } from "@/lib/operations";
 import { daysSince, latestSeason, nextSeasonLabel } from "@/lib/season";
 
@@ -39,7 +40,12 @@ function Plot() {
     const liveVisits = alive(visits).sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : b.createdAt - a.createdAt));
     const findings = alive(await db.findings.where("visitId").anyOf(liveVisits.map((v) => v.id)).toArray());
     const ops = alive(operations).sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
-    return { plot, farm, seasons: alive(seasons), visits: liveVisits, findings, operations: ops, today: todayISO() };
+    const [moves, supplies] = await Promise.all([
+      db.stockMoves.where("operationId").anyOf(ops.map((o) => o.id)).toArray(),
+      db.supplies.toArray(),
+    ]);
+    const uses = usesByOperation(alive(moves), alive(supplies));
+    return { plot, farm, seasons: alive(seasons), visits: liveVisits, findings, operations: ops, uses, today: todayISO() };
   }, [id]);
 
   if (!data) return null;
@@ -53,7 +59,7 @@ function Plot() {
     );
   }
 
-  const { plot, farm, seasons, visits, findings, operations, today } = data;
+  const { plot, farm, seasons, visits, findings, operations, uses, today } = data;
   const current = latestSeason(seasons);
   const seasonOf = (v: { seasonId?: string | null }) => (seasons.some((s) => s.id === v.seasonId) ? v.seasonId : current?.id);
   const currentVisits = visits.filter((v) => seasonOf(v) === current?.id);
@@ -219,7 +225,14 @@ function Plot() {
         <section className="space-y-3">
           <SectionTitle>Operações desta safra</SectionTitle>
           {currentOps.map((o) => (
-            <OperationRow key={o.id} op={o} today={today} farmName={farm?.name ?? "Fazenda"} plotName={plot.name} />
+            <OperationRow
+              key={o.id}
+              op={o}
+              today={today}
+              farmName={farm?.name ?? "Fazenda"}
+              plotName={plot.name}
+              uses={uses.get(o.id)}
+            />
           ))}
         </section>
       ) : null}

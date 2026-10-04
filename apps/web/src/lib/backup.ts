@@ -8,6 +8,8 @@ import {
   type Plot,
   type Rainfall,
   type Season,
+  type StockMove,
+  type Supply,
   type Visit,
 } from "./db";
 
@@ -32,19 +34,21 @@ async function dataUrlToBlob(url: string): Promise<Blob> {
 }
 
 export async function countLocalRecords() {
-  const [farms, plots, visits, photos, rainfall, operations] = await Promise.all([
+  const [farms, plots, visits, photos, rainfall, operations, supplies, stockMoves] = await Promise.all([
     db.farms.filter((r) => !r.deletedAt).count(),
     db.plots.filter((r) => !r.deletedAt).count(),
     db.visits.filter((r) => !r.deletedAt).count(),
     db.photos.filter((r) => !r.deletedAt).count(),
     db.rainfall.filter((r) => !r.deletedAt).count(),
     db.operations.filter((r) => !r.deletedAt).count(),
+    db.supplies.filter((r) => !r.deletedAt).count(),
+    db.stockMoves.filter((r) => !r.deletedAt).count(),
   ]);
-  return { farms, plots, visits, photos, rainfall, operations };
+  return { farms, plots, visits, photos, rainfall, operations, supplies, stockMoves };
 }
 
 export async function exportBackup(): Promise<Blob> {
-  const [farms, plots, seasons, visits, findings, photos, rainfall, operations] = await Promise.all([
+  const [farms, plots, seasons, visits, findings, photos, rainfall, operations, supplies, stockMoves] = await Promise.all([
     db.farms.toArray(),
     db.plots.toArray(),
     db.seasons.toArray(),
@@ -53,6 +57,8 @@ export async function exportBackup(): Promise<Blob> {
     db.photos.toArray(),
     db.rainfall.toArray(),
     db.operations.toArray(),
+    db.supplies.toArray(),
+    db.stockMoves.toArray(),
   ]);
   const photosOut = await Promise.all(photos.map(async (p) => ({ ...p, blob: await blobToDataUrl(p.blob) })));
   const payload = {
@@ -67,6 +73,8 @@ export async function exportBackup(): Promise<Blob> {
     photos: photosOut,
     rainfall,
     operations,
+    supplies,
+    stockMoves,
   };
   return new Blob([JSON.stringify(payload)], { type: "application/json" });
 }
@@ -126,7 +134,7 @@ export async function importBackup(file: File): Promise<number> {
   let written = 0;
   await db.transaction(
     "rw",
-    [db.farms, db.plots, db.seasons, db.visits, db.findings, db.photos, db.rainfall, db.operations],
+    [db.farms, db.plots, db.seasons, db.visits, db.findings, db.photos, db.rainfall, db.operations, db.supplies, db.stockMoves],
     async () => {
       written += await merge<Farm>(data.farms, (ids) => db.farms.bulkGet(ids), (r) => db.farms.bulkPut(r));
       written += await merge<Plot>(data.plots, (ids) => db.plots.bulkGet(ids), (r) => db.plots.bulkPut(r));
@@ -137,6 +145,8 @@ export async function importBackup(file: File): Promise<number> {
       written += await merge<Rainfall>(data.rainfall, (ids) => db.rainfall.bulkGet(ids), (r) => db.rainfall.bulkPut(r));
       // Backups anteriores às operações simplesmente não têm esta chave.
       written += await merge<Operation>(data.operations, (ids) => db.operations.bulkGet(ids), (r) => db.operations.bulkPut(r));
+      written += await merge<Supply>(data.supplies, (ids) => db.supplies.bulkGet(ids), (r) => db.supplies.bulkPut(r));
+      written += await merge<StockMove>(data.stockMoves, (ids) => db.stockMoves.bulkGet(ids), (r) => db.stockMoves.bulkPut(r));
     },
   );
   return written;

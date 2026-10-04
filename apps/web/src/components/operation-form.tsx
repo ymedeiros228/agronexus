@@ -3,10 +3,12 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
+import { useLiveQuery } from "dexie-react-hooks";
 import { OperationIcon } from "@/components/operation-bits";
+import { SuppliesEditor, rowsFromUses, rowsToUses, validateRows, type SupplyRow } from "@/components/operation-supplies";
 import { PlotPickerFields, usePlotPicker } from "@/components/plot-picker";
 import { Button, Card, Empty, Field, LinkButton, PageTitle, inputClass } from "@/components/ui";
-import { removeOperation, type OperationKind, type OperationStatus } from "@/lib/db";
+import { alive, db, removeOperation, type OperationKind, type OperationStatus } from "@/lib/db";
 import { todayISO } from "@/lib/format";
 import {
   OPERATION_KINDS,
@@ -16,11 +18,13 @@ import {
   saveOperation,
   type OperationInput,
 } from "@/lib/operations";
+import { stockOf } from "@/lib/stock";
 
 type Props = {
   /** Presente na edição. */
   id?: string;
   initial?: OperationInput;
+  initialUses?: { moveId: string; supplyId: string; qty: number }[];
   defaultFarmId?: string;
   defaultPlotId?: string;
   defaultKind?: OperationKind;
@@ -28,10 +32,17 @@ type Props = {
 
 const STATUSES: OperationStatus[] = ["concluida", "andamento", "planejada"];
 
-export function OperationForm({ id, initial, defaultFarmId, defaultPlotId, defaultKind }: Props) {
+export function OperationForm({ id, initial, initialUses, defaultFarmId, defaultPlotId, defaultKind }: Props) {
   const router = useRouter();
   const picker = usePlotPicker(initial?.farmId ?? defaultFarmId ?? "", initial?.plotId ?? defaultPlotId ?? "");
   const today = todayISO();
+  const [rows, setRows] = useState<SupplyRow[]>(() => rowsFromUses(initialUses ?? []));
+  const stock = useLiveQuery(async () => {
+    const [supplies, moves, ops] = await Promise.all([db.supplies.toArray(), db.stockMoves.toArray(), db.operations.toArray()]);
+    return stockOf(alive(supplies), alive(moves), alive(ops)).sort((a, b) =>
+      a.supply.name.localeCompare(b.supply.name, "pt-BR", { numeric: true }),
+    );
+  });
 
   const [kind, setKind] = useState<OperationKind>(initial?.kind ?? defaultKind ?? "aplicacao");
   const [status, setStatus] = useState<OperationStatus>(initial?.status ?? "concluida");
@@ -63,6 +74,11 @@ export function OperationForm({ id, initial, defaultFarmId, defaultPlotId, defau
       setError("O custo precisa ser um número, por exemplo 15.000 ou 1.250,50.");
       return;
     }
+    const rowsError = validateRows(rows, areaHa);
+    if (rowsError) {
+      setError(rowsError);
+      return;
+    }
     setError("");
     setSaving(true);
     const input: OperationInput = {
@@ -79,7 +95,8 @@ export function OperationForm({ id, initial, defaultFarmId, defaultPlotId, defau
       yieldBags: kind === "colheita" ? bagsN : null,
     };
     try {
-      const savedId = await saveOperation(input, today, id);
+      const uses = await rowsToUses(rows, areaHa);
+      const savedId = await saveOperation(input, today, id, uses);
       router.push(`/operacoes?destaque=${savedId}`);
     } catch {
       setSaving(false);
@@ -198,6 +215,17 @@ export function OperationForm({ id, initial, defaultFarmId, defaultPlotId, defau
             Produtividade: {formatNumberBR(yieldPreview, 1)} sc/ha
           </p>
         ) : null}
+
+        <div className="border-t border-border pt-4">
+          <SuppliesEditor
+            rows={rows}
+            onChange={setRows}
+            stock={stock ?? []}
+            areaHa={areaHa}
+            kind={kind}
+            onUseCost={(value) => setCost(formatNumberBR(value, 2))}
+          />
+        </div>
 
         <Field label="Custo total (R$)" hint="Opcional. Insumo + serviço. Entra no custo por hectare da safra.">
           <input inputMode="decimal" value={cost} onChange={(e) => setCost(e.target.value)} placeholder="Ex.: 18.500" className={inputClass} />
