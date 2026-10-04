@@ -109,6 +109,7 @@ export default function DataPage() {
             ["Talhões", counts.plots],
             ["Visitas", counts.visits],
             ["Fotos", counts.photos],
+            ["Operações", counts.operations],
             ["Chuvas", counts.rainfall],
           ].map(([label, n]) => (
             <div key={label}>

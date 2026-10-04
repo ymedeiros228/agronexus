@@ -71,6 +71,24 @@ export type Rainfall = Base & {
   mm: number;
 };
 
+export type OperationKind = "preparo" | "plantio" | "adubacao" | "aplicacao" | "colheita" | "outro";
+export type OperationStatus = "planejada" | "andamento" | "concluida";
+
+/** Operação agrícola feita (ou planejada) pelo produtor num talhão. Registro dele, não recomendação do app. */
+export type Operation = Base & {
+  farmId: string;
+  plotId: string;
+  seasonId: string | null;
+  kind: OperationKind;
+  status: OperationStatus;
+  date: string; // AAAA-MM-DD: data prevista ou de início
+  doneDate: string | null; // quando foi concluída
+  areaHa: number | null; // área trabalhada
+  description: string; // o que foi feito / produto usado, como o produtor anotou
+  cost: number | null; // custo total em R$ (insumo + serviço)
+  yieldBags: number | null; // só colheita: sacas de 60 kg colhidas
+};
+
 /** Configurações deste aparelho (não vão para o backup). */
 export type Meta = { key: string; value: unknown };
 
@@ -82,6 +100,7 @@ class AgroDB extends Dexie {
   findings!: EntityTable<Finding, "id">;
   photos!: EntityTable<Photo, "id">;
   rainfall!: EntityTable<Rainfall, "id">;
+  operations!: EntityTable<Operation, "id">;
   meta!: EntityTable<Meta, "key">;
 
   constructor() {
@@ -115,6 +134,10 @@ class AgroDB extends Dexie {
             if (v.seasonId === undefined) v.seasonId = latest.get(v.plotId)?.id ?? null;
           });
       });
+    // v3: operações agrícolas.
+    this.version(3).stores({
+      operations: "id, farmId, plotId, seasonId, date, status, updatedAt",
+    });
   }
 }
 
@@ -162,24 +185,30 @@ export function addSeason(plotId: string, data: Pick<Season, "label" | "cultivar
   return db.seasons.add({ ...newBase(), plotId, ...data });
 }
 
-/** Remove o talhão e as visitas dele (exclusão lógica). */
+/** Remove o talhão com visitas e operações (exclusão lógica). */
 export async function removePlot(id: string) {
   const mark = gone();
-  await db.transaction("rw", db.plots, db.visits, async () => {
+  await db.transaction("rw", [db.plots, db.visits, db.operations], async () => {
     await db.plots.update(id, mark);
     await db.visits.where("plotId").equals(id).filter((v) => !v.deletedAt).modify(mark);
+    await db.operations.where("plotId").equals(id).filter((r) => !r.deletedAt).modify(mark);
   });
 }
 
-/** Remove a fazenda com talhões, visitas e chuvas (exclusão lógica). */
+/** Remove a fazenda com talhões, visitas, operações e chuvas (exclusão lógica). */
 export async function removeFarm(id: string) {
   const mark = gone();
-  await db.transaction("rw", [db.farms, db.plots, db.visits, db.rainfall], async () => {
+  await db.transaction("rw", [db.farms, db.plots, db.visits, db.rainfall, db.operations], async () => {
     await db.farms.update(id, mark);
     await db.plots.where("farmId").equals(id).filter((r) => !r.deletedAt).modify(mark);
     await db.visits.where("farmId").equals(id).filter((r) => !r.deletedAt).modify(mark);
     await db.rainfall.where("farmId").equals(id).filter((r) => !r.deletedAt).modify(mark);
+    await db.operations.where("farmId").equals(id).filter((r) => !r.deletedAt).modify(mark);
   });
+}
+
+export function removeOperation(id: string) {
+  return db.operations.update(id, gone());
 }
 
 export async function getMeta<T>(key: string): Promise<T | undefined> {

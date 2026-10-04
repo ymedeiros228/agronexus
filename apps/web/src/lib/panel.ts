@@ -1,4 +1,5 @@
-import type { Farm, Finding, Plot, Rainfall, Season, Visit } from "./db";
+import type { Farm, Finding, Operation, Plot, Rainfall, Season, Visit } from "./db";
+import { KIND_NAME, isLate } from "./operations";
 import { daysSince, latestSeason } from "./season";
 
 /**
@@ -28,7 +29,7 @@ export type FarmStatus = {
 };
 
 export type Alert = {
-  kind: "followup-overdue" | "followup-today" | "no-visit";
+  kind: "followup-overdue" | "followup-today" | "no-visit" | "operation-late";
   farmName: string;
   plotName: string;
   text: string;
@@ -44,7 +45,10 @@ type Input = {
   visits: Visit[];
   findings: Finding[];
   rainfall: Rainfall[];
+  operations?: Operation[];
 };
+
+const ddmm = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
 
 function isoDaysAgo(today: string, days: number): string {
   const d = new Date(`${today}T12:00:00`);
@@ -103,7 +107,7 @@ export function buildPanel(input: Input, today: string): { farms: FarmStatus[]; 
             kind: "followup-overdue",
             farmName: farm.name,
             plotName: plot.name,
-            text: `Retorno atrasado (era ${due.slice(8, 10)}/${due.slice(5, 7)})`,
+            text: `Retorno atrasado (era ${ddmm(due)})`,
             href: `/visita?id=${v.id}`,
             weight: 1000 + daysSince(due, now),
           });
@@ -117,6 +121,17 @@ export function buildPanel(input: Input, today: string): { farms: FarmStatus[]; 
             weight: 500,
           });
         }
+      }
+
+      for (const o of (input.operations ?? []).filter((x) => x.plotId === plot.id && isLate(x, today))) {
+        alerts.push({
+          kind: "operation-late",
+          farmName: farm.name,
+          plotName: plot.name,
+          text: `${KIND_NAME[o.kind]} atrasada (prevista para ${ddmm(o.date)})`,
+          href: `/operacao?id=${o.id}`,
+          weight: 900 + daysSince(o.date, now),
+        });
       }
 
       return {

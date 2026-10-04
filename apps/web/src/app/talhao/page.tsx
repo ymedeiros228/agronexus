@@ -5,9 +5,11 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState, type FormEvent } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { Button, Card, Chip, Empty, Field, LinkButton, PageTitle, SectionTitle, inputClass } from "@/components/ui";
+import { OperationRow } from "@/components/operation-row";
 import { KIND_LABEL } from "@/lib/catalog";
 import { addSeason, alive, db, removePlot, updatePlot, updateSeason, type Finding, type Season, type Visit } from "@/lib/db";
-import { formatDate } from "@/lib/format";
+import { formatDate, todayISO } from "@/lib/format";
+import { formatBRL, formatNumberBR, yieldByPlot } from "@/lib/operations";
 import { daysSince, latestSeason, nextSeasonLabel } from "@/lib/season";
 
 type Panel = "plot" | "season" | "new-season" | null;
@@ -28,14 +30,16 @@ function Plot() {
   const data = useLiveQuery(async () => {
     const plot = await db.plots.get(id);
     if (!plot || plot.deletedAt) return { plot: null };
-    const [farm, seasons, visits] = await Promise.all([
+    const [farm, seasons, visits, operations] = await Promise.all([
       db.farms.get(plot.farmId),
       db.seasons.where("plotId").equals(id).toArray(),
       db.visits.where("plotId").equals(id).toArray(),
+      db.operations.where("plotId").equals(id).toArray(),
     ]);
     const liveVisits = alive(visits).sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : b.createdAt - a.createdAt));
     const findings = alive(await db.findings.where("visitId").anyOf(liveVisits.map((v) => v.id)).toArray());
-    return { plot, farm, seasons: alive(seasons), visits: liveVisits, findings };
+    const ops = alive(operations).sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+    return { plot, farm, seasons: alive(seasons), visits: liveVisits, findings, operations: ops, today: todayISO() };
   }, [id]);
 
   if (!data) return null;
@@ -49,10 +53,13 @@ function Plot() {
     );
   }
 
-  const { plot, farm, seasons, visits, findings } = data;
+  const { plot, farm, seasons, visits, findings, operations, today } = data;
   const current = latestSeason(seasons);
-  const seasonOf = (v: Visit) => (seasons.some((s) => s.id === v.seasonId) ? v.seasonId : current?.id);
+  const seasonOf = (v: { seasonId?: string | null }) => (seasons.some((s) => s.id === v.seasonId) ? v.seasonId : current?.id);
   const currentVisits = visits.filter((v) => seasonOf(v) === current?.id);
+  const currentOps = operations.filter((o) => seasonOf(o) === current?.id);
+  const harvest = current ? yieldByPlot(current.label, seasons, currentOps)[0] : undefined;
+  const opCost = currentOps.reduce((s, o) => s + (o.cost ?? 0), 0);
   const older = seasons.filter((s) => s.id !== current?.id).sort((a, b) => b.createdAt - a.createdAt);
   const findingsByVisit = new Map<string, Finding[]>();
   for (const f of findings) findingsByVisit.set(f.visitId, [...(findingsByVisit.get(f.visitId) ?? []), f]);
@@ -177,9 +184,29 @@ function Plot() {
               </div>
               <Chip tone="muted">Safra {current.label}</Chip>
             </div>
-            <LinkButton href={`/visitas/nova?fazenda=${plot.farmId}&talhao=${plot.id}`} className="w-full">
-              Registrar visita
-            </LinkButton>
+            {harvest || opCost > 0 ? (
+              <div className="grid grid-cols-2 gap-3 rounded-xl bg-background p-3 text-sm">
+                <div>
+                  <p className="text-xs text-muted">Produtividade</p>
+                  <p className="font-semibold">{harvest ? `${formatNumberBR(harvest.perHa, 1)} sc/ha` : "—"}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted">Custo anotado</p>
+                  <p className="font-semibold">
+                    {opCost > 0 ? formatBRL(opCost) : "—"}
+                    {opCost > 0 && plot.areaHa ? (
+                      <span className="block text-xs font-normal text-muted">{formatBRL(opCost / plot.areaHa)}/ha</span>
+                    ) : null}
+                  </p>
+                </div>
+              </div>
+            ) : null}
+            <div className="grid grid-cols-2 gap-2">
+              <LinkButton href={`/visitas/nova?fazenda=${plot.farmId}&talhao=${plot.id}`}>Registrar visita</LinkButton>
+              <LinkButton href={`/operacoes/nova?fazenda=${plot.farmId}&talhao=${plot.id}`} variant="secondary">
+                Operação
+              </LinkButton>
+            </div>
           </Card>
         ) : (
           <Empty title="Sem safra" text="Cadastre a safra para acompanhar cultivar e dias após o plantio." />
@@ -187,6 +214,15 @@ function Plot() {
       </section>
 
       <FindingsSummary visits={currentVisits} findingsByVisit={findingsByVisit} />
+
+      {currentOps.length > 0 ? (
+        <section className="space-y-3">
+          <SectionTitle>Operações desta safra</SectionTitle>
+          {currentOps.map((o) => (
+            <OperationRow key={o.id} op={o} today={today} farmName={farm?.name ?? "Fazenda"} plotName={plot.name} />
+          ))}
+        </section>
+      ) : null}
 
       <section className="space-y-3">
         <SectionTitle>Visitas desta safra</SectionTitle>

@@ -1,4 +1,15 @@
-import { db, setMeta, type Farm, type Finding, type Photo, type Plot, type Rainfall, type Season, type Visit } from "./db";
+import {
+  db,
+  setMeta,
+  type Farm,
+  type Finding,
+  type Operation,
+  type Photo,
+  type Plot,
+  type Rainfall,
+  type Season,
+  type Visit,
+} from "./db";
 
 /**
  * Backup e restauração dos dados locais em um único arquivo JSON.
@@ -21,18 +32,19 @@ async function dataUrlToBlob(url: string): Promise<Blob> {
 }
 
 export async function countLocalRecords() {
-  const [farms, plots, visits, photos, rainfall] = await Promise.all([
+  const [farms, plots, visits, photos, rainfall, operations] = await Promise.all([
     db.farms.filter((r) => !r.deletedAt).count(),
     db.plots.filter((r) => !r.deletedAt).count(),
     db.visits.filter((r) => !r.deletedAt).count(),
     db.photos.filter((r) => !r.deletedAt).count(),
     db.rainfall.filter((r) => !r.deletedAt).count(),
+    db.operations.filter((r) => !r.deletedAt).count(),
   ]);
-  return { farms, plots, visits, photos, rainfall };
+  return { farms, plots, visits, photos, rainfall, operations };
 }
 
 export async function exportBackup(): Promise<Blob> {
-  const [farms, plots, seasons, visits, findings, photos, rainfall] = await Promise.all([
+  const [farms, plots, seasons, visits, findings, photos, rainfall, operations] = await Promise.all([
     db.farms.toArray(),
     db.plots.toArray(),
     db.seasons.toArray(),
@@ -40,6 +52,7 @@ export async function exportBackup(): Promise<Blob> {
     db.findings.toArray(),
     db.photos.toArray(),
     db.rainfall.toArray(),
+    db.operations.toArray(),
   ]);
   const photosOut = await Promise.all(photos.map(async (p) => ({ ...p, blob: await blobToDataUrl(p.blob) })));
   const payload = {
@@ -53,6 +66,7 @@ export async function exportBackup(): Promise<Blob> {
     findings,
     photos: photosOut,
     rainfall,
+    operations,
   };
   return new Blob([JSON.stringify(payload)], { type: "application/json" });
 }
@@ -112,7 +126,7 @@ export async function importBackup(file: File): Promise<number> {
   let written = 0;
   await db.transaction(
     "rw",
-    [db.farms, db.plots, db.seasons, db.visits, db.findings, db.photos, db.rainfall],
+    [db.farms, db.plots, db.seasons, db.visits, db.findings, db.photos, db.rainfall, db.operations],
     async () => {
       written += await merge<Farm>(data.farms, (ids) => db.farms.bulkGet(ids), (r) => db.farms.bulkPut(r));
       written += await merge<Plot>(data.plots, (ids) => db.plots.bulkGet(ids), (r) => db.plots.bulkPut(r));
@@ -121,6 +135,8 @@ export async function importBackup(file: File): Promise<number> {
       written += await merge<Finding>(data.findings, (ids) => db.findings.bulkGet(ids), (r) => db.findings.bulkPut(r));
       written += await merge<Photo>(photos, (ids) => db.photos.bulkGet(ids), (r) => db.photos.bulkPut(r));
       written += await merge<Rainfall>(data.rainfall, (ids) => db.rainfall.bulkGet(ids), (r) => db.rainfall.bulkPut(r));
+      // Backups anteriores às operações simplesmente não têm esta chave.
+      written += await merge<Operation>(data.operations, (ids) => db.operations.bulkGet(ids), (r) => db.operations.bulkPut(r));
     },
   );
   return written;

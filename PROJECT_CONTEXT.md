@@ -1,51 +1,52 @@
 # PROJECT_CONTEXT
 
 ## Estado atual
-Fase 1 em andamento. Existe um app web (PWA) em `apps/web` com o fluxo completo da visita de monitoramento de soja, local-first (dados no IndexedDB do aparelho, sem servidor).
+Fase 1 em andamento. App web (PWA) em `apps/web`, local-first (dados no IndexedDB do aparelho, sem servidor). **Cliente: produtor/gestor** (ADR 0007). Referência visual e situação de cada tela: `docs/roadmap.md`.
 
 Rodar localmente (a partir de `apps/web`):
 - Desenvolvimento: `npm run dev`
 - Produção (necessária para o service worker): `npm run build` e depois `npx next start -p 3100`
-- Conferência: `npx tsc --noEmit`, `npx eslint`
+- Conferência: `npx tsc --noEmit`, `npx eslint`, `npm test` (Vitest, 37 testes)
 
 ## Concluído
-- Repositório, estrutura de docs, Plano Mestre, ADRs 0001 a 0006.
-- App em `apps/web` (Next.js 16, Tailwind 4, Dexie):
-  - Fazendas e talhões (com safra, cultivar e data de plantio; mostra dias após o plantio).
-  - Visita: estágio V/R, achados (praga, doença, daninha), fotos com diagnóstico confirmado e GPS, observações, recomendação, retorno combinado.
-  - Relatório da visita: compartilhar (WhatsApp/área de transferência), imprimir/PDF, marcar retorno como feito.
-  - Registro de chuva por fazenda.
-  - Início com retornos pendentes e últimas visitas.
-  - Fotos comprimidas no aparelho antes de salvar.
-  - PWA: manifesto, ícones, service worker (`public/sw.js`), aviso de "sem internet".
-  - Aba Dados: backup em arquivo JSON (com fotos), restauração que só mescla (nunca apaga), pedido de armazenamento persistente. Ciclo apagar e restaurar verificado no navegador.
-- Verificado no navegador embutido: cadastro de fazenda e talhão, visita completa com foto, persistência no IndexedDB, relatório.
-- Tipos, lint e build de produção passam. Todas as páginas são estáticas.
+- Repositório, docs, Plano Mestre, ADRs 0001 a 0007, roadmap por tela.
+- App em `apps/web` (Next.js 16, Tailwind 4, Dexie 4, lucide-react):
+  - **Painel do gestor**: KPIs da safra só com dados registrados (área, produtividade sc/ha, custo/ha, operações abertas), "Pede atenção" (retorno atrasado, operação atrasada, talhão sem visita), situação de cada talhão, operações recentes, custos por tipo, produtividade por talhão, seletor de safra.
+  - **Layout**: barra lateral verde no computador; no celular, barra inferior com ícones e botão + (visita ou operação).
+  - **Fazendas e talhões**: cadastrar, editar, remover (exclusão lógica em cascata). Página do talhão com safra atual, nova safra, achados da safra, operações, linha do tempo e safras anteriores.
+  - **Monitoramento**: visita com estágio, achados, fotos com diagnóstico e GPS, recomendação, retorno; editar visita; relatório (WhatsApp/PDF); tela de ocorrências e lista de visitas.
+  - **Operações**: preparo, plantio, adubação, aplicação, colheita, outro; planejada/em andamento/concluída; área, custo, sacas colhidas (produtividade); atalho para concluir; plantio concluído preenche a data de plantio vazia da safra.
+  - **Dados**: backup JSON (com fotos e operações), restauração que só mescla, lembrete de backup no painel, planilha CSV, armazenamento persistente.
+  - Banco local na versão 3 (v2: safra na visita, tabela meta; v3: operações). Migração v1→v2 verificada no navegador com dados reais de teste.
+- Tipos, lint, testes e build passam. Todas as páginas são estáticas.
 
 ## Decisões arquiteturais
 - 0001 Nicho piloto: soja no Maranhão.
-- 0002 Primeiro usuário: técnico/agrônomo que visita fazendas (hipótese a validar).
+- 0002 (substituída pela 0007).
 - 0003 Primeira fatia: caderno de monitoramento offline.
 - 0004 Stack inicial: Next.js + IndexedDB (Dexie), app único; Postgres/PostGIS depois.
 - 0005 IA: coletar fotos rotuladas primeiro, treinar depois.
 - 0006 Não usar dados internos de empresas de terceiros.
-- Rotas dinâmicas usam query string (`/visita?id=...`, `/fazenda?id=...`) para serem páginas estáticas e funcionarem offline.
+- 0007 Cliente: produtor/gestor; quem registra pode ser ele, gerente, monitor ou consultor.
+- Rotas dinâmicas usam query string (`/visita?id=...`) para serem estáticas e funcionarem offline.
+- Números digitados seguem o padrão brasileiro (`15.000` = quinze mil; `1.250,50`).
+
+## Padrões a validar com agrônomo e produtores
+- Aviso de talhão sem visita: mais de 7 dias (`NO_VISIT_ALERT_DAYS`).
+- Não cobra visita depois de 150 dias do plantio ou com estágio R8 (`MAX_CYCLE_DAYS`).
+- Catálogo de estágios, pragas e doenças é preliminar; sem níveis de ação nem recomendação de produto.
 
 ## Pendente
-- **Teste real do offline**: o navegador embutido do Claude Code não registra service workers, então o cache do shell do app NÃO foi verificado. Testar num Chrome/celular. Service worker exige HTTPS (ou localhost), então o teste no celular pede um deploy.
-- Catálogo agronômico (estágios, pragas, doenças) é preliminar e precisa de revisão de um agrônomo.
-- Orçamento mensal de hospedagem (não informado).
-- Nome/marca/domínio/INPI.
-- Testadores reais (pelo menos 3, perfis diferentes). Há uma estagiária de agronomia como porta de entrada.
-- Servidor, login e sincronização (próxima fase); escolha do provedor de PostgreSQL e hospedagem (ADR futura).
-- Backup é manual. Sem servidor, quem limpar os dados do navegador sem ter baixado o backup perde tudo.
-- `npm audit` aponta 5 vulnerabilidades altas, todas na cadeia do ESLint (só desenvolvimento). Corrigir com `--force` rebaixaria o eslint-config-next, então ficou como está.
+- **Hospedagem de teste (HTTPS)**: necessária para testar no celular e o offline real (o navegador embutido não registra service worker). Opções levantadas em 2026-10-04, aguardando escolha da fundadora.
+- Servidor, login e sincronização (para o gestor ver o que outra pessoa registrou).
+- Orçamento mensal (não informado). Nome/marca/domínio/INPI.
+- Testadores reais (pelo menos 3). A irmã da fundadora (estagiária de agronomia) é a porta de entrada para produtores.
+- `npm audit`: 5 vulnerabilidades altas na cadeia do ESLint (só desenvolvimento); corrigir com `--force` rebaixaria o eslint-config-next.
 
 ## Problemas conhecidos
 - Sem Docker nem PostgreSQL local nesta máquina.
-- Dados só existem no aparelho até haver sincronização.
-- IA de diagnóstico é só intenção (ADR 0005).
+- Dados só existem no aparelho até haver sincronização; backup é manual.
+- No navegador embutido do Claude Code, capturas de tela às vezes saem cortadas; a medição pelo DOM confirma que o layout está certo.
 
 ## Próximas etapas
-1. Testar em celular de verdade (deploy de teste) e validar o fluxo com a primeira pessoa do campo.
-2. Servidor, login e sincronização idempotente.
+Ver `docs/roadmap.md` ("Ordem proposta").

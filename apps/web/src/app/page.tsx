@@ -1,12 +1,16 @@
 "use client";
 
 import Link from "next/link";
+import { useState, type ReactNode } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
+import { CircleDollarSign, LandPlot, Tractor, TrendingUp, type LucideIcon } from "lucide-react";
+import { OperationRow } from "@/components/operation-row";
 import { VisitRow } from "@/components/visit-row";
 import { Card, Chip, Empty, LinkButton, PageTitle, SectionTitle } from "@/components/ui";
 import { LAST_BACKUP_KEY } from "@/lib/backup";
-import { alive, db, getMeta } from "@/lib/db";
+import { alive, db, getMeta, type OperationKind } from "@/lib/db";
 import { formatDate, todayISO } from "@/lib/format";
+import { KIND_NAME, formatBRL, formatNumberBR, seasonLabels, seasonStats, yieldByPlot } from "@/lib/operations";
 import { NO_VISIT_ALERT_DAYS, buildPanel, type FarmStatus, type PlotStatus } from "@/lib/panel";
 
 /** Depois de quanto tempo sem backup o aviso aparece. */
@@ -14,135 +18,372 @@ const BACKUP_NAG_MS = 3 * 86_400_000;
 
 const mm = (n: number) => `${n.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} mm`;
 
+const KIND_COLOR: Record<OperationKind, string> = {
+  preparo: "#d97706",
+  plantio: "#1c6b41",
+  adubacao: "#0284c7",
+  aplicacao: "#10b981",
+  colheita: "#eab308",
+  outro: "#94a3b8",
+};
+
 export default function Home() {
+  const [chosenLabel, setChosenLabel] = useState<string>();
+
   const data = useLiveQuery(async () => {
-    const [farms, plots, seasons, visits, findings, rainfall, lastBackupAt] = await Promise.all([
+    const [farms, plots, seasons, visits, findings, rainfall, operations, lastBackupAt] = await Promise.all([
       db.farms.toArray(),
       db.plots.toArray(),
       db.seasons.toArray(),
       db.visits.orderBy("date").reverse().toArray(),
       db.findings.toArray(),
       db.rainfall.toArray(),
+      db.operations.toArray(),
       getMeta<number>(LAST_BACKUP_KEY),
     ]);
     const today = todayISO();
-    const live = alive(visits);
-    const since = lastBackupAt ?? 0;
-    const unsaved = Date.now() - since > BACKUP_NAG_MS ? live.filter((v) => v.updatedAt > since).length : 0;
     const liveFarms = alive(farms);
-    const livePlots = alive(plots);
+    const livePlots = alive(plots).filter((p) => liveFarms.some((f) => f.id === p.farmId));
+    const plotIds = new Set(livePlots.map((p) => p.id));
+    const live = alive(visits).filter((v) => plotIds.has(v.plotId));
+    const liveOps = alive(operations).filter((o) => plotIds.has(o.plotId));
+    const liveSeasons = alive(seasons).filter((s) => plotIds.has(s.plotId));
+    const since = lastBackupAt ?? 0;
+    const changed = [...live, ...liveOps].filter((r) => r.updatedAt > since).length;
     const panel = buildPanel(
       {
         farms: liveFarms,
         plots: livePlots,
-        seasons: alive(seasons),
+        seasons: liveSeasons,
         visits: live,
         findings: alive(findings),
         rainfall: alive(rainfall),
+        operations: liveOps,
       },
       today,
     );
     const upcoming = live
       .filter((v) => v.followUpDate && !v.followUpDone && v.followUpDate > today)
       .sort((a, b) => (a.followUpDate! < b.followUpDate! ? -1 : 1));
-    return { farms: liveFarms, plots: livePlots, visits: live, unsaved, panel, upcoming };
+    const recentOps = [...liveOps].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 5);
+    return {
+      today,
+      farms: liveFarms,
+      plots: livePlots,
+      seasons: liveSeasons,
+      visits: live,
+      operations: liveOps,
+      unsaved: Date.now() - since > BACKUP_NAG_MS ? changed : 0,
+      panel,
+      upcoming,
+      recentOps,
+    };
   });
 
   if (!data) return null;
 
+  const { today, panel } = data;
   const farmName = new Map(data.farms.map((f) => [f.id, f.name]));
   const plotName = new Map(data.plots.map((p) => [p.id, p.name]));
-  const { alerts, farms } = data.panel;
+  const labels = seasonLabels(data.seasons);
+  const label = chosenLabel && labels.includes(chosenLabel) ? chosenLabel : labels[0];
+  const stats = label ? seasonStats(label, data.seasons, data.plots, data.operations, today) : null;
+  const yields = label ? yieldByPlot(label, data.seasons, data.operations) : [];
+
+  if (data.farms.length === 0) {
+    return (
+      <>
+        <PageTitle title="Painel" subtitle="Como estão suas lavouras hoje." />
+        <Empty
+          title="Comece cadastrando uma fazenda"
+          text="Depois adicione os talhões. O painel mostra a situação de cada um, operações, custos e produtividade."
+          action={<LinkButton href="/fazendas">Cadastrar fazenda</LinkButton>}
+        />
+      </>
+    );
+  }
 
   return (
     <>
-      <PageTitle title="Painel" subtitle="Como estão suas lavouras hoje. Funciona sem internet." />
-
-      {data.farms.length === 0 ? (
-        <Empty
-          title="Comece cadastrando uma fazenda"
-          text="Depois adicione os talhões e registre a primeira visita."
-          action={<LinkButton href="/fazendas">Cadastrar fazenda</LinkButton>}
-        />
-      ) : (
-        <LinkButton href="/visitas/nova" className="w-full min-h-14 text-base">
-          + Nova visita
-        </LinkButton>
-      )}
+      <PageTitle
+        title="Painel"
+        subtitle="Como estão suas lavouras hoje."
+        action={
+          labels.length > 0 ? (
+            <label className="shrink-0">
+              <span className="sr-only">Safra</span>
+              <select
+                value={label}
+                onChange={(e) => setChosenLabel(e.target.value)}
+                className="min-h-10 rounded-xl border border-border bg-surface px-3 text-sm font-medium"
+              >
+                {labels.map((l) => (
+                  <option key={l} value={l}>
+                    Safra {l}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null
+        }
+      />
 
       {data.unsaved > 0 ? (
-        <Card className="space-y-3 border-warn/40 bg-warn/5">
-          <p className="text-sm">
+        <Card className="flex flex-col gap-3 border-warn/40 bg-warn/5 sm:flex-row sm:items-center">
+          <p className="flex-1 text-sm">
             <span className="font-semibold">
-              {data.unsaved === 1 ? "1 visita ainda não está" : `${data.unsaved} visitas ainda não estão`} em nenhum
+              {data.unsaved === 1 ? "1 registro ainda não está" : `${data.unsaved} registros ainda não estão`} em nenhum
               backup.
             </span>{" "}
-            Se o celular quebrar ou o navegador for limpo, elas se perdem.
+            Se o celular quebrar ou o navegador for limpo, eles se perdem.
           </p>
-          <LinkButton href="/dados" variant="secondary" className="w-full">
+          <LinkButton href="/dados" variant="secondary" className="shrink-0">
             Fazer backup agora
           </LinkButton>
         </Card>
       ) : null}
 
-      {alerts.length > 0 ? (
-        <section className="space-y-3">
-          <SectionTitle>Pede atenção</SectionTitle>
-          <Card className="divide-y divide-border p-0">
-            {alerts.map((a) => (
-              <Link key={`${a.kind}-${a.href}`} href={a.href} className="flex items-center gap-3 p-4 active:bg-brand-soft">
-                <span
-                  aria-hidden
-                  className={`size-2.5 shrink-0 rounded-full ${a.kind === "followup-overdue" ? "bg-danger" : "bg-warn"}`}
-                />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate font-medium">
-                    {a.farmName} <span className="text-muted">· {a.plotName}</span>
-                  </span>
-                  <span className="block text-sm text-muted">{a.text}</span>
-                </span>
-                <span aria-hidden className="text-muted">
-                  ›
-                </span>
+      {stats ? (
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <Kpi
+            icon={LandPlot}
+            label="Área da safra"
+            value={stats.areaHa ? `${formatNumberBR(stats.areaHa, 1)} ha` : "—"}
+            sub={stats.areaHa ? `${stats.plots} ${stats.plots === 1 ? "talhão" : "talhões"}` : "Informe a área dos talhões"}
+          />
+          <Kpi
+            icon={TrendingUp}
+            label="Produtividade média"
+            value={stats.yieldPerHa != null ? `${formatNumberBR(stats.yieldPerHa, 1)} sc/ha` : "—"}
+            sub={
+              stats.yieldPerHa != null
+                ? `${formatNumberBR(stats.harvestedHa, 1)} ha colhidos`
+                : "Aparece quando registrar a colheita"
+            }
+          />
+          <Kpi
+            icon={CircleDollarSign}
+            label="Custo por hectare"
+            value={stats.costPerHa != null ? formatBRL(stats.costPerHa) : "—"}
+            sub={stats.cost > 0 ? `Total ${formatBRL(stats.cost)}` : "Anote o custo nas operações"}
+          />
+          <Kpi
+            icon={Tractor}
+            label="Operações abertas"
+            value={String(stats.open)}
+            sub={
+              stats.late > 0
+                ? `${stats.late} atrasada${stats.late > 1 ? "s" : ""}`
+                : stats.doneToday > 0
+                  ? `${stats.doneToday} concluída${stats.doneToday > 1 ? "s" : ""} hoje`
+                  : "Nenhuma atrasada"
+            }
+            warn={stats.late > 0}
+          />
+        </div>
+      ) : null}
+
+      <div className="grid gap-6 lg:grid-cols-3">
+        <div className="space-y-6 lg:col-span-2">
+          {panel.alerts.length > 0 ? (
+            <section className="space-y-3">
+              <SectionTitle>Pede atenção</SectionTitle>
+              <Card className="divide-y divide-border p-0">
+                {panel.alerts.map((a) => (
+                  <Link key={`${a.kind}-${a.href}`} href={a.href} className="flex items-center gap-3 p-4 active:bg-brand-soft">
+                    <span
+                      aria-hidden
+                      className={`size-2.5 shrink-0 rounded-full ${
+                        a.kind === "followup-overdue" || a.kind === "operation-late" ? "bg-danger" : "bg-warn"
+                      }`}
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate font-medium">
+                        {a.farmName} <span className="text-muted">· Talhão {a.plotName}</span>
+                      </span>
+                      <span className="block text-sm text-muted">{a.text}</span>
+                    </span>
+                    <span aria-hidden className="text-muted">
+                      ›
+                    </span>
+                  </Link>
+                ))}
+              </Card>
+            </section>
+          ) : null}
+
+          {panel.farms.map((f) => (
+            <FarmBlock key={f.farm.id} status={f} />
+          ))}
+
+          {data.visits.length > 0 ? (
+            <section className="space-y-3">
+              <div className="flex items-center justify-between">
+                <SectionTitle>Últimas visitas</SectionTitle>
+                <Link href="/visitas" className="text-sm font-medium text-brand">
+                  Ver todas
+                </Link>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {data.visits.slice(0, 4).map((v) => (
+                  <VisitRow
+                    key={v.id}
+                    visit={v}
+                    farmName={farmName.get(v.farmId) ?? "Fazenda"}
+                    plotName={plotName.get(v.plotId) ?? "Talhão"}
+                  />
+                ))}
+              </div>
+            </section>
+          ) : null}
+        </div>
+
+        <aside className="space-y-6">
+          <section className="space-y-3">
+            <div className="flex items-center justify-between">
+              <SectionTitle>Operações recentes</SectionTitle>
+              <Link href="/operacoes" className="text-sm font-medium text-brand">
+                Ver todas
               </Link>
-            ))}
-          </Card>
-        </section>
-      ) : null}
+            </div>
+            {data.recentOps.length === 0 ? (
+              <Card className="space-y-3">
+                <p className="text-sm text-muted">Registre plantio, aplicações e colheita para acompanhar custo e produtividade.</p>
+                <LinkButton href="/operacoes/nova" variant="secondary" className="w-full">
+                  Registrar operação
+                </LinkButton>
+              </Card>
+            ) : (
+              data.recentOps.map((o) => (
+                <OperationRow
+                  key={o.id}
+                  op={o}
+                  today={today}
+                  farmName={farmName.get(o.farmId) ?? "Fazenda"}
+                  plotName={plotName.get(o.plotId) ?? "?"}
+                />
+              ))
+            )}
+          </section>
 
-      {farms.map((f) => (
-        <FarmBlock key={f.farm.id} status={f} />
-      ))}
+          {stats && stats.costByKind.length > 0 ? (
+            <section className="space-y-3">
+              <SectionTitle>Custos por tipo de operação</SectionTitle>
+              <Card>
+                <CostDonut items={stats.costByKind} total={stats.cost} perHa={stats.costPerHa} />
+              </Card>
+            </section>
+          ) : null}
 
-      {data.upcoming.length > 0 ? (
-        <section className="space-y-3">
-          <SectionTitle>Próximos retornos</SectionTitle>
-          {data.upcoming.map((v) => (
-            <VisitRow
-              key={v.id}
-              visit={v}
-              farmName={farmName.get(v.farmId) ?? "Fazenda"}
-              plotName={plotName.get(v.plotId) ?? "Talhão"}
-              showFollowUp
-            />
-          ))}
-        </section>
-      ) : null}
+          {yields.length > 0 ? (
+            <section className="space-y-3">
+              <SectionTitle>Produtividade por talhão</SectionTitle>
+              <Card className="space-y-3">
+                {yields.map((y) => {
+                  const best = yields[0].perHa;
+                  return (
+                    <div key={y.plotId} className="space-y-1">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="font-medium">Talhão {plotName.get(y.plotId) ?? "?"}</span>
+                        <span>{formatNumberBR(y.perHa, 1)} sc/ha</span>
+                      </div>
+                      <div className="h-2 overflow-hidden rounded-full bg-border/60">
+                        <div className="h-full rounded-full bg-brand" style={{ width: `${(y.perHa / best) * 100}%` }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </Card>
+            </section>
+          ) : null}
 
-      {data.visits.length > 0 ? (
-        <section className="space-y-3">
-          <SectionTitle>Últimas visitas</SectionTitle>
-          {data.visits.slice(0, 5).map((v) => (
-            <VisitRow
-              key={v.id}
-              visit={v}
-              farmName={farmName.get(v.farmId) ?? "Fazenda"}
-              plotName={plotName.get(v.plotId) ?? "Talhão"}
-            />
-          ))}
-        </section>
-      ) : null}
+          {data.upcoming.length > 0 ? (
+            <section className="space-y-3">
+              <SectionTitle>Próximos retornos</SectionTitle>
+              {data.upcoming.map((v) => (
+                <VisitRow
+                  key={v.id}
+                  visit={v}
+                  farmName={farmName.get(v.farmId) ?? "Fazenda"}
+                  plotName={plotName.get(v.plotId) ?? "Talhão"}
+                  showFollowUp
+                />
+              ))}
+            </section>
+          ) : null}
+        </aside>
+      </div>
     </>
+  );
+}
+
+function Kpi({
+  icon: Icon,
+  label,
+  value,
+  sub,
+  warn = false,
+}: {
+  icon: LucideIcon;
+  label: string;
+  value: string;
+  sub: ReactNode;
+  warn?: boolean;
+}) {
+  return (
+    <Card className="flex flex-col gap-2 p-3.5 sm:flex-row sm:items-start sm:gap-3 sm:p-4">
+      <span aria-hidden className="grid size-9 shrink-0 place-items-center rounded-xl bg-brand-soft text-brand sm:size-11">
+        <Icon className="size-5" />
+      </span>
+      <span className="min-w-0">
+        <span className="block text-xs text-muted">{label}</span>
+        <span className="block text-xl font-semibold tracking-tight sm:text-2xl">{value}</span>
+        <span className={`block text-xs ${warn ? "font-medium text-danger" : "text-muted"}`}>{sub}</span>
+      </span>
+    </Card>
+  );
+}
+
+function CostDonut({
+  items,
+  total,
+  perHa,
+}: {
+  items: { kind: OperationKind; cost: number }[];
+  total: number;
+  perHa: number | null;
+}) {
+  const stops = items.map((item, idx) => {
+    const before = items.slice(0, idx).reduce((s, i) => s + i.cost, 0);
+    return `${KIND_COLOR[item.kind]} ${(before / total) * 100}% ${((before + item.cost) / total) * 100}%`;
+  });
+  return (
+    <div className="flex items-center gap-5">
+      <div
+        className="relative grid size-32 shrink-0 place-items-center rounded-full"
+        style={{ background: `conic-gradient(${stops.join(", ")})` }}
+        role="img"
+        aria-label={`Custo total ${formatBRL(total)}`}
+      >
+        <div className="grid size-[5.5rem] place-items-center rounded-full bg-surface text-center">
+          <span>
+            <span className="block text-sm font-semibold">{perHa != null ? formatBRL(perHa) : formatBRL(total)}</span>
+            <span className="block text-[10px] text-muted">{perHa != null ? "por hectare" : "total"}</span>
+          </span>
+        </div>
+      </div>
+      <ul className="min-w-0 flex-1 space-y-1.5 text-sm">
+        {items.map((i) => (
+          <li key={i.kind} className="flex items-center justify-between gap-2">
+            <span className="flex min-w-0 items-center gap-2">
+              <span aria-hidden className="size-2.5 shrink-0 rounded-full" style={{ background: KIND_COLOR[i.kind] }} />
+              <span className="truncate">{KIND_NAME[i.kind]}</span>
+            </span>
+            <span className="text-muted">{Math.round((i.cost / total) * 100)}%</span>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
@@ -150,11 +391,11 @@ function FarmBlock({ status }: { status: FarmStatus }) {
   const { farm, plots, rain7, rain30 } = status;
   return (
     <section className="space-y-3">
-      <div className="flex items-baseline justify-between gap-3">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
         <Link href={`/fazenda?id=${farm.id}`} className="min-w-0 truncate text-xs font-semibold uppercase tracking-wider text-muted">
           {farm.name} ›
         </Link>
-        <span className="shrink-0 text-xs text-muted">
+        <span className="text-xs text-muted">
           Chuva 7 dias: {mm(rain7)} · 30 dias: {mm(rain30)}
         </span>
       </div>
@@ -168,7 +409,11 @@ function FarmBlock({ status }: { status: FarmStatus }) {
           </p>
         </Card>
       ) : (
-        plots.map((p) => <PlotCard key={p.plot.id} status={p} />)
+        <div className="grid gap-3 sm:grid-cols-2">
+          {plots.map((p) => (
+            <PlotCard key={p.plot.id} status={p} />
+          ))}
+        </div>
       )}
     </section>
   );
@@ -182,8 +427,8 @@ function PlotCard({ status }: { status: PlotStatus }) {
     .join(" · ");
 
   return (
-    <Link href={`/talhao?id=${plot.id}`} className="block active:scale-[0.99]">
-      <Card className="transition hover:border-brand/40">
+    <Link href={`/talhao?id=${plot.id}`} className="block h-full active:scale-[0.99]">
+      <Card className="h-full transition hover:border-brand/40">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="font-medium">Talhão {plot.name}</p>

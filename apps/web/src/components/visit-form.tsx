@@ -5,6 +5,7 @@ import { useState, type ChangeEvent, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { useLiveQuery } from "dexie-react-hooks";
 import { BlobImg } from "@/components/blob-img";
+import { PlotPickerFields, usePlotPicker } from "@/components/plot-picker";
 import { Button, Card, Empty, Field, LinkButton, PageTitle, SectionTitle, inputClass } from "@/components/ui";
 import { DIAGNOSIS_OPTIONS, FINDING_PRESETS, KIND_LABEL, STAGES } from "@/lib/catalog";
 import { alive, db, type FindingKind } from "@/lib/db";
@@ -29,13 +30,8 @@ export function VisitForm({ visitId, initial, seasonId, defaultFarmId, defaultPl
   const router = useRouter();
   const editing = Boolean(visitId);
 
-  const data = useLiveQuery(async () => ({
-    farms: alive(await db.farms.orderBy("name").toArray()),
-    plots: alive(await db.plots.toArray()),
-  }));
-
-  const [farmChoice, setFarmChoice] = useState(initial?.farmId ?? defaultFarmId ?? "");
-  const [plotChoice, setPlotChoice] = useState(initial?.plotId ?? defaultPlotId ?? "");
+  const picker = usePlotPicker(initial?.farmId ?? defaultFarmId ?? "", initial?.plotId ?? defaultPlotId ?? "");
+  const { farms, farmId, plotId } = picker;
   const [date, setDate] = useState(initial?.date ?? todayISO());
   const [stage, setStage] = useState(initial?.stage ?? "");
   const [findings, setFindings] = useState<FindingDraft[]>(
@@ -49,16 +45,6 @@ export function VisitForm({ visitId, initial, seasonId, defaultFarmId, defaultPl
   const [followUp, setFollowUp] = useState(initial?.followUpDate ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-
-  // Se só existe uma opção, ela já vem escolhida.
-  const farms = data?.farms ?? [];
-  const farmId = farmChoice || (farms.length === 1 ? farms[0].id : "");
-  const farmPlots = (data?.plots ?? []).filter((p) => p.farmId === farmId);
-  const plotId = farmPlots.some((p) => p.id === plotChoice)
-    ? plotChoice
-    : farmPlots.length === 1
-      ? farmPlots[0].id
-      : "";
 
   const seasons = useLiveQuery(
     async () => (plotId ? alive(await db.seasons.where("plotId").equals(plotId).toArray()) : []),
@@ -145,7 +131,7 @@ export function VisitForm({ visitId, initial, seasonId, defaultFarmId, defaultPl
     router.push(`/visita?id=${id}`);
   }
 
-  if (!data) return null;
+  if (!picker.loaded) return null;
 
   if (farms.length === 0) {
     return (
@@ -177,48 +163,7 @@ export function VisitForm({ visitId, initial, seasonId, defaultFarmId, defaultPl
       />
 
       <Card className="space-y-4">
-        <Field label="Fazenda">
-          <select
-            className={inputClass}
-            value={farmId}
-            onChange={(e) => {
-              setFarmChoice(e.target.value);
-              setPlotChoice("");
-            }}
-          >
-            <option value="">Selecione</option>
-            {farms.map((f) => (
-              <option key={f.id} value={f.id}>
-                {f.name}
-              </option>
-            ))}
-          </select>
-        </Field>
-
-        <Field label="Talhão">
-          <select
-            className={inputClass}
-            value={plotId}
-            onChange={(e) => setPlotChoice(e.target.value)}
-            disabled={!farmId}
-          >
-            <option value="">{farmId ? "Selecione" : "Escolha a fazenda antes"}</option>
-            {farmPlots.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-                {p.areaHa ? ` · ${p.areaHa} ha` : ""}
-              </option>
-            ))}
-          </select>
-        </Field>
-        {farmId && farmPlots.length === 0 ? (
-          <p className="text-sm text-muted">
-            Esta fazenda ainda não tem talhões.{" "}
-            <Link className="text-brand underline" href={`/fazenda?id=${farmId}`}>
-              Cadastrar talhão
-            </Link>
-          </p>
-        ) : null}
+        <PlotPickerFields picker={picker} />
         {season ? (
           <p className="rounded-xl bg-brand-soft px-3 py-2 text-sm text-brand-strong">
             {season.cultivar || "Cultivar não informada"} · safra {season.label}
