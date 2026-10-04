@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { useLiveQuery } from "dexie-react-hooks";
 import { Button, Card, Empty, LinkButton, SectionTitle } from "@/components/ui";
 import { KIND_LABEL } from "@/lib/catalog";
+import { EXPENSE_NAME } from "@/lib/finance";
 import { formatDate, todayISO } from "@/lib/format";
 import { KIND_NAME, formatBRL, formatNumberBR, seasonLabels } from "@/lib/operations";
 import { seasonReport, type SeasonReport } from "@/lib/report";
@@ -25,8 +26,14 @@ function summaryText(r: SeasonReport, farms: string): string {
     r.yieldPerHa != null
       ? `Produtividade: ${sc(r.yieldPerHa)} (${formatNumberBR(r.bags, 0)} sacas em ${formatNumberBR(r.harvestedHa, 1)} ha colhidos)`
       : "Produtividade: colheita ainda não registrada",
-    r.cost > 0 ? `Custo realizado: ${formatBRL(r.cost)}${r.costPerHa != null ? ` (${formatBRL(r.costPerHa)}/ha)` : ""}` : null,
-    r.costPerBag != null ? `Custo por saca: ${formatBRL(r.costPerBag, 2)}` : null,
+    r.finance.totalCost > 0
+      ? `Custo realizado: ${formatBRL(r.finance.totalCost)}${r.finance.costPerHa != null ? ` (${formatBRL(r.finance.costPerHa)}/ha)` : ""}`
+      : null,
+    r.finance.breakEvenPrice != null ? `Custo por saca: ${formatBRL(r.finance.breakEvenPrice, 2)}` : null,
+    r.finance.soldBags > 0
+      ? `Vendido: ${formatNumberBR(r.finance.soldBags, 0)} sc a ${formatBRL(r.finance.avgPrice!, 2)}/sc (${formatBRL(r.finance.revenue)})`
+      : null,
+    r.finance.margin != null ? `Margem: ${formatBRL(r.finance.margin)}${r.finance.marginPerHa != null ? ` (${formatBRL(r.finance.marginPerHa)}/ha)` : ""}` : null,
     "",
     "Por talhão:",
     ...r.plots.map(
@@ -115,12 +122,43 @@ function Report() {
         <Stat label="Produtividade" value={sc(r.yieldPerHa)} sub="Sacas de 60 kg por hectare colhido" />
         <Stat
           label="Custo realizado"
-          value={r.cost > 0 ? formatBRL(r.cost) : "—"}
-          sub={r.plannedCost > 0 ? `Previsto ainda: ${formatBRL(r.plannedCost)}` : "Operações concluídas e em andamento"}
+          value={r.finance.totalCost > 0 ? formatBRL(r.finance.totalCost) : "—"}
+          sub={
+            r.finance.expensesCost > 0
+              ? `Operações ${formatBRL(r.finance.operationsCost)} + despesas ${formatBRL(r.finance.expensesCost)}`
+              : r.plannedCost > 0
+                ? `Previsto ainda: ${formatBRL(r.plannedCost)}`
+                : "Operações concluídas e em andamento"
+          }
         />
-        <Stat label="Custo por hectare" value={brl(r.costPerHa)} sub="Custo realizado ÷ área" />
-        <Stat label="Custo por saca" value={r.costPerBag != null ? formatBRL(r.costPerBag, 2) : "—"} sub="Custo/ha ÷ produtividade" />
+        <Stat label="Custo por hectare" value={brl(r.finance.costPerHa)} sub="Custo realizado ÷ área" />
+        <Stat
+          label="Custo por saca"
+          value={r.finance.breakEvenPrice != null ? formatBRL(r.finance.breakEvenPrice, 2) : "—"}
+          sub="Custo/ha ÷ produtividade"
+        />
       </div>
+
+      {r.finance.soldBags > 0 || r.finance.expensesCost > 0 ? (
+        <Section title="Financeiro">
+          <Card className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm sm:grid-cols-4">
+            <Fact label="Receita (vendas)">{r.finance.soldBags > 0 ? formatBRL(r.finance.revenue) : "—"}</Fact>
+            <Fact label="Preço médio">{r.finance.avgPrice != null ? `${formatBRL(r.finance.avgPrice, 2)}/sc` : "—"}</Fact>
+            <Fact label="Margem" tone={r.finance.margin == null ? undefined : r.finance.margin >= 0 ? "good" : "bad"}>
+              {r.finance.margin != null ? formatBRL(r.finance.margin) : "—"}
+              {r.finance.marginPerHa != null ? (
+                <span className="block text-xs font-normal text-muted">{formatBRL(r.finance.marginPerHa)}/ha</span>
+              ) : null}
+            </Fact>
+            <Fact label="Ponto de equilíbrio">
+              {r.finance.breakEvenYield != null ? `${formatNumberBR(r.finance.breakEvenYield, 1)} sc/ha` : "—"}
+            </Fact>
+            {r.finance.unsoldBags != null ? (
+              <Fact label="Grão a vender">{`${formatNumberBR(r.finance.unsoldBags, 0)} sc`}</Fact>
+            ) : null}
+          </Card>
+        </Section>
+      ) : null}
 
       {r.openOps > 0 ? (
         <Card className={`text-sm ${r.lateOps ? "border-danger/40" : ""}`}>
@@ -143,7 +181,7 @@ function Report() {
                 <Th>Colheita</Th>
                 <Th right>Área</Th>
                 <Th right>Produtividade</Th>
-                <Th right>Custo/ha</Th>
+                <Th right>Custo/ha (operações)</Th>
                 <Th right>Visitas</Th>
               </tr>
             </thead>
@@ -187,6 +225,22 @@ function Report() {
                     <div className="h-full rounded-full bg-brand" style={{ width: `${(k.cost / maxKind) * 100}%` }} />
                   </div>
                 </div>
+              ))}
+            </Card>
+          </Section>
+        ) : null}
+
+        {r.finance.expensesByCategory.length ? (
+          <Section title="Despesas gerais">
+            <Card className="space-y-2 text-sm">
+              {r.finance.expensesByCategory.map((e) => (
+                <p key={e.category} className="flex justify-between gap-3">
+                  <span>{EXPENSE_NAME[e.category]}</span>
+                  <span className="font-medium">
+                    {formatBRL(e.amount)}
+                    {r.areaHa > 0 ? <span className="font-normal text-muted"> · {formatBRL(e.amount / r.areaHa)}/ha</span> : null}
+                  </span>
+                </p>
               ))}
             </Card>
           </Section>
@@ -261,13 +315,14 @@ function Report() {
       {r.history.length > 1 ? (
         <Section title="Comparação entre safras">
           <Card className="overflow-x-auto p-0">
-            <table className="w-full min-w-[420px] text-left text-sm">
+            <table className="w-full min-w-[520px] text-left text-sm">
               <thead className="border-b border-border text-xs text-muted">
                 <tr>
                   <Th>Safra</Th>
                   <Th right>Área</Th>
                   <Th right>Produtividade</Th>
                   <Th right>Custo/ha</Th>
+                  <Th right>Margem/ha</Th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -285,6 +340,7 @@ function Report() {
                     <Td right>{h.areaHa ? `${formatNumberBR(h.areaHa, 1)} ha` : "—"}</Td>
                     <Td right>{sc(h.yieldPerHa)}</Td>
                     <Td right>{brl(h.costPerHa)}</Td>
+                    <Td right>{brl(h.marginPerHa)}</Td>
                   </tr>
                 ))}
               </tbody>
@@ -294,8 +350,9 @@ function Report() {
       ) : null}
 
       <p className="text-xs text-muted">
-        Calculado só com o que foi registrado no AgroNexus. Custo realizado = operações concluídas ou em andamento.
-        Custo dos insumos é estimado pelo preço médio das entradas.
+        Calculado só com o que foi registrado no AgroNexus. Custo realizado = operações concluídas ou em andamento +
+        despesas gerais. Custo dos insumos é estimado pelo preço médio das entradas. Margem = vendas lançadas − custo
+        realizado.
       </p>
     </>
   );
@@ -307,6 +364,15 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
       <SectionTitle>{title}</SectionTitle>
       {children}
     </section>
+  );
+}
+
+function Fact({ label, children, tone }: { label: string; children: ReactNode; tone?: "good" | "bad" }) {
+  return (
+    <div>
+      <p className="text-xs text-muted">{label}</p>
+      <p className={`font-semibold ${tone === "good" ? "text-brand-strong" : tone === "bad" ? "text-danger" : ""}`}>{children}</p>
+    </div>
   );
 }
 

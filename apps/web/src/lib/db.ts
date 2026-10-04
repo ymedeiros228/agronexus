@@ -128,6 +128,36 @@ export type StockMove = Base & {
   note: string; // fornecedor, nota fiscal, motivo do ajuste
 };
 
+/** Venda de grão da safra (rótulo "2026/27"), como o produtor fechou. */
+export type Sale = Base & {
+  seasonLabel: string;
+  date: string; // AAAA-MM-DD
+  bags: number; // sacas de 60 kg
+  pricePerBag: number; // R$ líquido por saca
+  buyer: string;
+  note: string;
+};
+
+export type ExpenseCategory =
+  | "arrendamento"
+  | "mao_de_obra"
+  | "manutencao"
+  | "frete"
+  | "assistencia"
+  | "administrativo"
+  | "impostos"
+  | "juros"
+  | "outro";
+
+/** Despesa da safra que não é de uma operação (arrendamento, salários, manutenção...). */
+export type Expense = Base & {
+  seasonLabel: string;
+  date: string; // AAAA-MM-DD
+  category: ExpenseCategory;
+  description: string;
+  amount: number; // R$
+};
+
 /** Configurações deste aparelho (não vão para o backup). */
 export type Meta = { key: string; value: unknown };
 
@@ -142,6 +172,8 @@ class AgroDB extends Dexie {
   operations!: EntityTable<Operation, "id">;
   supplies!: EntityTable<Supply, "id">;
   stockMoves!: EntityTable<StockMove, "id">;
+  sales!: EntityTable<Sale, "id">;
+  expenses!: EntityTable<Expense, "id">;
   meta!: EntityTable<Meta, "key">;
 
   constructor() {
@@ -183,6 +215,11 @@ class AgroDB extends Dexie {
     this.version(4).stores({
       supplies: "id, name, category, updatedAt",
       stockMoves: "id, supplyId, operationId, date, updatedAt",
+    });
+    // v5: vendas e despesas gerais da safra.
+    this.version(5).stores({
+      sales: "id, seasonLabel, date, updatedAt",
+      expenses: "id, seasonLabel, date, updatedAt",
     });
   }
 }
@@ -273,6 +310,14 @@ export async function removeOperation(id: string) {
 
 export function removeStockMove(id: string) {
   return db.stockMoves.update(id, gone());
+}
+
+export function removeSale(id: string) {
+  return db.sales.update(id, gone());
+}
+
+export function removeExpense(id: string) {
+  return db.expenses.update(id, gone());
 }
 
 /**

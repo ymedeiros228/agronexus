@@ -1,17 +1,4 @@
-import {
-  db,
-  setMeta,
-  type Farm,
-  type Finding,
-  type Operation,
-  type Photo,
-  type Plot,
-  type Rainfall,
-  type Season,
-  type StockMove,
-  type Supply,
-  type Visit,
-} from "./db";
+import { db, setMeta, type Photo } from "./db";
 
 /**
  * Backup e restauração dos dados locais em um único arquivo JSON.
@@ -20,6 +7,26 @@ import {
  */
 
 const VERSION = 1;
+
+/**
+ * Tabelas que vão no backup, além das fotos. Tabela nova entra aqui.
+ * Backups antigos simplesmente não têm as chaves das tabelas mais novas.
+ */
+const TABLES = [
+  "farms",
+  "plots",
+  "seasons",
+  "visits",
+  "findings",
+  "rainfall",
+  "operations",
+  "supplies",
+  "stockMoves",
+  "sales",
+  "expenses",
+] as const;
+
+type TableName = (typeof TABLES)[number];
 
 async function blobToDataUrl(blob: Blob): Promise<string> {
   const bytes = new Uint8Array(await blob.arrayBuffer());
@@ -33,48 +40,23 @@ async function dataUrlToBlob(url: string): Promise<Blob> {
   return (await fetch(url)).blob();
 }
 
-export async function countLocalRecords() {
-  const [farms, plots, visits, photos, rainfall, operations, supplies, stockMoves] = await Promise.all([
-    db.farms.filter((r) => !r.deletedAt).count(),
-    db.plots.filter((r) => !r.deletedAt).count(),
-    db.visits.filter((r) => !r.deletedAt).count(),
-    db.photos.filter((r) => !r.deletedAt).count(),
-    db.rainfall.filter((r) => !r.deletedAt).count(),
-    db.operations.filter((r) => !r.deletedAt).count(),
-    db.supplies.filter((r) => !r.deletedAt).count(),
-    db.stockMoves.filter((r) => !r.deletedAt).count(),
-  ]);
-  return { farms, plots, visits, photos, rainfall, operations, supplies, stockMoves };
+/** Registros vivos de cada tabela, para a tela de dados. */
+export async function countLocalRecords(): Promise<Record<TableName | "photos", number>> {
+  const names = [...TABLES, "photos"] as const;
+  const counts = await Promise.all(names.map((t) => db.table(t).filter((r: { deletedAt?: number }) => !r.deletedAt).count()));
+  return Object.fromEntries(names.map((t, i) => [t, counts[i]])) as Record<TableName | "photos", number>;
 }
 
 export async function exportBackup(): Promise<Blob> {
-  const [farms, plots, seasons, visits, findings, photos, rainfall, operations, supplies, stockMoves] = await Promise.all([
-    db.farms.toArray(),
-    db.plots.toArray(),
-    db.seasons.toArray(),
-    db.visits.toArray(),
-    db.findings.toArray(),
-    db.photos.toArray(),
-    db.rainfall.toArray(),
-    db.operations.toArray(),
-    db.supplies.toArray(),
-    db.stockMoves.toArray(),
-  ]);
+  const rows = await Promise.all(TABLES.map((t) => db.table(t).toArray()));
+  const photos = await db.photos.toArray();
   const photosOut = await Promise.all(photos.map(async (p) => ({ ...p, blob: await blobToDataUrl(p.blob) })));
   const payload = {
     app: "agronexus",
     version: VERSION,
     exportedAt: new Date().toISOString(),
-    farms,
-    plots,
-    seasons,
-    visits,
-    findings,
+    ...Object.fromEntries(TABLES.map((t, i) => [t, rows[i]])),
     photos: photosOut,
-    rainfall,
-    operations,
-    supplies,
-    stockMoves,
   };
   return new Blob([JSON.stringify(payload)], { type: "application/json" });
 }
@@ -98,16 +80,12 @@ function isRow(value: unknown): value is Row {
 }
 
 /** Grava só o que é novo ou mais recente que o registro que já está no aparelho. */
-async function merge<T extends Row>(
-  rows: unknown,
-  get: (ids: string[]) => PromiseLike<(T | undefined)[]>,
-  put: (rows: T[]) => PromiseLike<unknown>,
-): Promise<number> {
+async function merge(rows: unknown, table: string): Promise<number> {
   if (!Array.isArray(rows)) return 0;
-  const valid = rows.filter(isRow) as T[];
-  const existing = await get(valid.map((r) => r.id));
+  const valid = rows.filter(isRow);
+  const existing: (Row | undefined)[] = await db.table(table).bulkGet(valid.map((r) => r.id));
   const toWrite = valid.filter((r, i) => !existing[i] || existing[i]!.updatedAt < r.updatedAt);
-  if (toWrite.length) await put(toWrite);
+  if (toWrite.length) await db.table(table).bulkPut(toWrite);
   return toWrite.length;
 }
 
@@ -132,22 +110,9 @@ export async function importBackup(file: File): Promise<number> {
   }
 
   let written = 0;
-  await db.transaction(
-    "rw",
-    [db.farms, db.plots, db.seasons, db.visits, db.findings, db.photos, db.rainfall, db.operations, db.supplies, db.stockMoves],
-    async () => {
-      written += await merge<Farm>(data.farms, (ids) => db.farms.bulkGet(ids), (r) => db.farms.bulkPut(r));
-      written += await merge<Plot>(data.plots, (ids) => db.plots.bulkGet(ids), (r) => db.plots.bulkPut(r));
-      written += await merge<Season>(data.seasons, (ids) => db.seasons.bulkGet(ids), (r) => db.seasons.bulkPut(r));
-      written += await merge<Visit>(data.visits, (ids) => db.visits.bulkGet(ids), (r) => db.visits.bulkPut(r));
-      written += await merge<Finding>(data.findings, (ids) => db.findings.bulkGet(ids), (r) => db.findings.bulkPut(r));
-      written += await merge<Photo>(photos, (ids) => db.photos.bulkGet(ids), (r) => db.photos.bulkPut(r));
-      written += await merge<Rainfall>(data.rainfall, (ids) => db.rainfall.bulkGet(ids), (r) => db.rainfall.bulkPut(r));
-      // Backups anteriores às operações simplesmente não têm esta chave.
-      written += await merge<Operation>(data.operations, (ids) => db.operations.bulkGet(ids), (r) => db.operations.bulkPut(r));
-      written += await merge<Supply>(data.supplies, (ids) => db.supplies.bulkGet(ids), (r) => db.supplies.bulkPut(r));
-      written += await merge<StockMove>(data.stockMoves, (ids) => db.stockMoves.bulkGet(ids), (r) => db.stockMoves.bulkPut(r));
-    },
-  );
+  await db.transaction("rw", [...TABLES.map((t) => db.table(t)), db.photos], async () => {
+    for (const t of TABLES) written += await merge(data[t], t);
+    written += await merge(photos, "photos");
+  });
   return written;
 }

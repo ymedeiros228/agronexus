@@ -4,7 +4,7 @@ import { useEffect, useState, type ChangeEvent } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { Button, Card, PageTitle, SectionTitle } from "@/components/ui";
 import { LAST_BACKUP_KEY, countLocalRecords, exportBackup, importBackup, markBackupDone } from "@/lib/backup";
-import { exportOperationsCsv, exportStockCsv, exportVisitsCsv } from "@/lib/csv";
+import { exportFinanceCsv, exportOperationsCsv, exportStockCsv, exportVisitsCsv } from "@/lib/csv";
 import { getMeta } from "@/lib/db";
 import { todayISO } from "@/lib/format";
 
@@ -65,10 +65,15 @@ export default function DataPage() {
     }
   }
 
-  async function downloadCsv(kind: "visitas" | "operacoes" | "estoque") {
+  async function downloadCsv(kind: "visitas" | "operacoes" | "estoque" | "financeiro") {
     setBusy(true);
     try {
-      const make = { visitas: exportVisitsCsv, operacoes: exportOperationsCsv, estoque: exportStockCsv }[kind];
+      const make = {
+        visitas: exportVisitsCsv,
+        operacoes: exportOperationsCsv,
+        estoque: exportStockCsv,
+        financeiro: exportFinanceCsv,
+      }[kind];
       saveFile(await make(), `agronexus-${kind}-${todayISO()}.csv`);
       setMessage({ tone: "ok", text: "Planilha gerada. Abre no Excel ou no Google Planilhas." });
     } catch {
@@ -114,6 +119,8 @@ export default function DataPage() {
             ["Chuvas", counts.rainfall],
             ["Insumos", counts.supplies],
             ["Lançamentos", counts.stockMoves],
+            ["Vendas", counts.sales],
+            ["Despesas", counts.expenses],
           ].map(([label, n]) => (
             <div key={label} className="min-w-0">
               <p className="text-2xl font-semibold">{n}</p>
@@ -127,8 +134,8 @@ export default function DataPage() {
         <SectionTitle>Backup</SectionTitle>
         <Card className="space-y-3">
           <p className="text-sm text-muted">
-            Gera um arquivo com tudo: fazendas, visitas, fotos, operações e estoque. Restaurar nunca apaga nada, só
-            acrescenta o que falta.
+            Gera um arquivo com tudo: fazendas, visitas, fotos, operações, estoque, vendas e despesas. Restaurar nunca
+            apaga nada, só acrescenta o que falta.
           </p>
           {lastBackupAt !== undefined ? (
             <p className="text-sm">
@@ -158,6 +165,14 @@ export default function DataPage() {
           </Button>
           <Button variant="secondary" onClick={() => downloadCsv("estoque")} disabled={busy || !counts?.supplies} className="w-full">
             Estoque de insumos
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={() => downloadCsv("financeiro")}
+            disabled={busy || !(counts?.sales || counts?.expenses)}
+            className="w-full"
+          >
+            Vendas e despesas
           </Button>
           <Button variant="secondary" onClick={() => downloadCsv("visitas")} disabled={busy || !counts?.visits} className="w-full">
             Visitas (uma linha por achado)

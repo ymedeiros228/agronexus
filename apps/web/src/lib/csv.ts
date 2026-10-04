@@ -1,5 +1,17 @@
 import { KIND_LABEL } from "./catalog";
-import { alive, db, type Farm, type Finding, type Operation, type Plot, type Season, type Visit } from "./db";
+import {
+  alive,
+  db,
+  type Expense,
+  type Farm,
+  type Finding,
+  type Operation,
+  type Plot,
+  type Sale,
+  type Season,
+  type Visit,
+} from "./db";
+import { EXPENSE_NAME } from "./finance";
 import { formatDate } from "./format";
 import { KIND_NAME, STATUS_NAME } from "./operations";
 import { latestSeason } from "./season";
@@ -182,6 +194,28 @@ export function stockRows(stock: SupplyStock[]): string[][] {
       num(s.avgCost),
       num(s.value),
     ]);
+}
+
+const FINANCE_HEADER = ["Tipo", "Safra", "Data", "Categoria / comprador", "Descrição", "Sacas", "Preço por saca (R$)", "Valor (R$)"];
+
+/** Vendas e despesas gerais, por data. */
+export function financeRows(sales: Sale[], expenses: Expense[]): string[][] {
+  const rows = [
+    ...sales.map((s) => ({
+      date: s.date,
+      row: ["Venda", s.seasonLabel, formatDate(s.date), s.buyer, s.note, num(s.bags, 1), num(s.pricePerBag), num(s.bags * s.pricePerBag)],
+    })),
+    ...expenses.map((e) => ({
+      date: e.date,
+      row: ["Despesa", e.seasonLabel, formatDate(e.date), EXPENSE_NAME[e.category], e.description, "", "", num(e.amount)],
+    })),
+  ];
+  return rows.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0)).map((r) => r.row);
+}
+
+export async function exportFinanceCsv(): Promise<Blob> {
+  const [sales, expenses] = await Promise.all([db.sales.toArray(), db.expenses.toArray()]);
+  return csvBlob([FINANCE_HEADER, ...financeRows(alive(sales), alive(expenses))]);
 }
 
 export async function exportStockCsv(): Promise<Blob> {

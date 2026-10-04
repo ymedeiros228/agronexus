@@ -6,7 +6,7 @@ Fase 1 em andamento. App web (PWA) em `apps/web`, local-first (dados no IndexedD
 Rodar localmente (a partir de `apps/web`):
 - Desenvolvimento: `npm run dev`
 - Produção (necessária para o service worker): `npm run build` e depois `npx next start -p 3100`
-- Conferência: `npx tsc --noEmit`, `npx eslint`, `npm test` (Vitest, 56 testes)
+- Conferência: `npx tsc --noEmit`, `npx eslint`, `npm test` (Vitest, 60 testes)
 
 ## Concluído
 - Repositório, docs, Plano Mestre, ADRs 0001 a 0007, roadmap por tela.
@@ -19,8 +19,9 @@ Rodar localmente (a partir de `apps/web`):
   - **Insumos e estoque**: cadastro (nome do produtor, categoria, unidade, estoque mínimo), entrada com valor pago, contagem que lança a diferença como ajuste, insumos na operação (total ou dose por hectare), baixa só quando a operação é concluída, "previsto" para operações abertas, aviso "vai faltar"/estoque baixo/saldo negativo no painel, preço médio das entradas, sugestão de custo da operação pelos insumos. Insumo usado em operação não pode ser excluído.
   - **Safras e relatório da safra**: lista de safras com progresso da colheita; relatório com área, produção, produtividade, custo realizado, custo/ha, custo por saca, por talhão, custo por tipo, insumos usados, fitossanidade, chuva do ano agrícola e comparação entre safras; compartilhar (WhatsApp) e PDF.
   - **Custo realizado x previsto**: só operação concluída ou em andamento entra no custo; planejada aparece como "previsto".
-  - **Dados**: backup JSON (com fotos, operações e estoque), restauração que só mescla, lembrete de backup no painel, planilhas CSV (visitas, operações com insumos, estoque), armazenamento persistente.
-  - Banco local na versão 4 (v2: safra na visita, tabela meta; v3: operações; v4: insumos e movimentos de estoque). Migrações verificadas no navegador com dados de teste.
+  - **Financeiro da safra**: vendas (sacas, preço líquido, comprador), despesas gerais por categoria, receita, custo total (operações + despesas), margem e margem/ha, ponto de equilíbrio (sc/ha ao preço médio e R$/sc com a produtividade), grão produzido/vendido/a vender, composição do custo. Entra no painel (custo/ha), no relatório e na comparação entre safras.
+  - **Dados**: backup JSON de todas as tabelas (lista única em `backup.ts`), restauração que só mescla, lembrete de backup no painel, planilhas CSV (visitas, operações com insumos, estoque, vendas e despesas), armazenamento persistente.
+  - Banco local na versão 5 (v2: safra na visita, tabela meta; v3: operações; v4: insumos e movimentos de estoque; v5: vendas e despesas). Migrações verificadas no navegador com dados de teste.
 - Tipos, lint, testes e build passam. Todas as páginas são estáticas.
 
 ## Decisões arquiteturais
@@ -42,6 +43,7 @@ Rodar localmente (a partir de `apps/web`):
 - Uso de insumo de operação planejada não baixa o saldo; aparece como "previsto".
 - Ano agrícola da safra: 1º de julho a 30 de junho (chuva do relatório usa esse período).
 - Custo por saca = custo por hectare ÷ produtividade (funciona mesmo com colheita parcial).
+- Vendas e despesas ficam na safra (rótulo), não por fazenda/talhão. Margem = vendas lançadas − custo realizado; sem venda, não há margem.
 
 ## Pendente
 - **Hospedagem de teste (HTTPS)**: necessária para testar no celular e o offline real (o navegador embutido não registra service worker). Opções levantadas em 2026-10-04, aguardando escolha da fundadora.

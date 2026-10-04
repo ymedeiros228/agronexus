@@ -6,6 +6,7 @@ import { FileText } from "lucide-react";
 import { Card, Empty, LinkButton, PageTitle } from "@/components/ui";
 import { todayISO } from "@/lib/format";
 import { formatBRL, formatNumberBR, seasonLabels, seasonStats } from "@/lib/operations";
+import { seasonFinance } from "@/lib/finance";
 import { loadReportInput } from "@/lib/report-data";
 import { latestSeason } from "@/lib/season";
 
@@ -38,6 +39,7 @@ export default function SeasonsPage() {
       <ul className="grid gap-3 lg:grid-cols-2">
         {labels.map((label) => {
           const s = seasonStats(label, input.seasons, input.plots, input.operations, today);
+          const money = seasonFinance(label, s, input.sales, input.expenses);
           const harvestPct = s.areaHa > 0 ? Math.min(100, (s.harvestedHa / s.areaHa) * 100) : 0;
           return (
             <li key={label}>
@@ -63,14 +65,20 @@ export default function SeasonsPage() {
                     </div>
                     <div>
                       <dt className="text-xs text-muted">Custo/ha</dt>
-                      <dd className="font-semibold">{s.costPerHa != null ? formatBRL(s.costPerHa) : "—"}</dd>
+                      <dd className="font-semibold">{money.costPerHa != null ? formatBRL(money.costPerHa) : "—"}</dd>
                     </div>
                     <div>
-                      <dt className="text-xs text-muted">Abertas</dt>
-                      <dd className={`font-semibold ${s.late ? "text-danger" : ""}`}>
-                        {s.open}
-                        {s.late ? ` (${s.late} atras.)` : ""}
-                      </dd>
+                      <dt className="text-xs text-muted">{money.marginPerHa != null ? "Margem/ha" : "Abertas"}</dt>
+                      {money.marginPerHa != null ? (
+                        <dd className={`font-semibold ${money.marginPerHa < 0 ? "text-danger" : "text-brand-strong"}`}>
+                          {formatBRL(money.marginPerHa)}
+                        </dd>
+                      ) : (
+                        <dd className={`font-semibold ${s.late ? "text-danger" : ""}`}>
+                          {s.open}
+                          {s.late ? ` (${s.late} atras.)` : ""}
+                        </dd>
+                      )}
                     </div>
                   </dl>
                   <div className="space-y-1">

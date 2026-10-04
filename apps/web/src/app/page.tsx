@@ -12,6 +12,7 @@ import { alive, db, getMeta, type OperationKind } from "@/lib/db";
 import { formatDate, todayISO } from "@/lib/format";
 import { KIND_NAME, formatBRL, formatNumberBR, seasonLabels, seasonStats, yieldByPlot } from "@/lib/operations";
 import { NO_VISIT_ALERT_DAYS, buildPanel, type FarmStatus, type PlotStatus } from "@/lib/panel";
+import { seasonFinance } from "@/lib/finance";
 import { stockAlerts, stockOf, usesByOperation } from "@/lib/stock";
 
 /** Item do "Pede atenção": talhão (visita, retorno, operação) ou estoque. */
@@ -35,18 +36,21 @@ export default function Home() {
   const [chosenLabel, setChosenLabel] = useState<string>();
 
   const data = useLiveQuery(async () => {
-    const [farms, plots, seasons, visits, findings, rainfall, operations, supplies, moves, lastBackupAt] = await Promise.all([
-      db.farms.toArray(),
-      db.plots.toArray(),
-      db.seasons.toArray(),
-      db.visits.orderBy("date").reverse().toArray(),
-      db.findings.toArray(),
-      db.rainfall.toArray(),
-      db.operations.toArray(),
-      db.supplies.toArray(),
-      db.stockMoves.toArray(),
-      getMeta<number>(LAST_BACKUP_KEY),
-    ]);
+    const [farms, plots, seasons, visits, findings, rainfall, operations, supplies, moves, sales, expenses, lastBackupAt] =
+      await Promise.all([
+        db.farms.toArray(),
+        db.plots.toArray(),
+        db.seasons.toArray(),
+        db.visits.orderBy("date").reverse().toArray(),
+        db.findings.toArray(),
+        db.rainfall.toArray(),
+        db.operations.toArray(),
+        db.supplies.toArray(),
+        db.stockMoves.toArray(),
+        db.sales.toArray(),
+        db.expenses.toArray(),
+        getMeta<number>(LAST_BACKUP_KEY),
+      ]);
     const today = todayISO();
     const liveFarms = alive(farms);
     const livePlots = alive(plots).filter((p) => liveFarms.some((f) => f.id === p.farmId));
@@ -56,8 +60,12 @@ export default function Home() {
     const liveSeasons = alive(seasons).filter((s) => plotIds.has(s.plotId));
     const liveSupplies = alive(supplies);
     const liveMoves = alive(moves);
+    const liveSales = alive(sales);
+    const liveExpenses = alive(expenses);
     const since = lastBackupAt ?? 0;
-    const changed = [...live, ...liveOps, ...liveSupplies, ...liveMoves].filter((r) => r.updatedAt > since).length;
+    const changed = [...live, ...liveOps, ...liveSupplies, ...liveMoves, ...liveSales, ...liveExpenses].filter(
+      (r) => r.updatedAt > since,
+    ).length;
     const panel = buildPanel(
       {
         farms: liveFarms,
@@ -101,6 +109,8 @@ export default function Home() {
       seasons: liveSeasons,
       visits: live,
       operations: liveOps,
+      sales: liveSales,
+      expenses: liveExpenses,
       unsaved: Date.now() - since > BACKUP_NAG_MS ? changed : 0,
       panel,
       attention,
@@ -118,6 +128,7 @@ export default function Home() {
   const labels = seasonLabels(data.seasons);
   const label = chosenLabel && labels.includes(chosenLabel) ? chosenLabel : labels[0];
   const stats = label ? seasonStats(label, data.seasons, data.plots, data.operations, today) : null;
+  const money = label && stats ? seasonFinance(label, stats, data.sales, data.expenses) : null;
   const yields = label ? yieldByPlot(label, data.seasons, data.operations) : [];
 
   if (data.farms.length === 0) {
@@ -194,10 +205,10 @@ export default function Home() {
           <Kpi
             icon={CircleDollarSign}
             label="Custo por hectare"
-            value={stats.costPerHa != null ? formatBRL(stats.costPerHa) : "—"}
+            value={money?.costPerHa != null ? formatBRL(money.costPerHa) : "—"}
             sub={
-              stats.cost > 0
-                ? `Realizado ${formatBRL(stats.cost)}${stats.plannedCost > 0 ? ` · previsto +${formatBRL(stats.plannedCost)}` : ""}`
+              money && money.totalCost > 0
+                ? `Realizado ${formatBRL(money.totalCost)}${stats.plannedCost > 0 ? ` · previsto +${formatBRL(stats.plannedCost)}` : ""}`
                 : stats.plannedCost > 0
                   ? `Previsto ${formatBRL(stats.plannedCost)} (nada realizado)`
                   : "Anote o custo nas operações"
@@ -308,7 +319,7 @@ export default function Home() {
             <section className="space-y-3">
               <SectionTitle>Custos por tipo de operação</SectionTitle>
               <Card>
-                <CostDonut items={stats.costByKind} total={stats.cost} perHa={stats.costPerHa} />
+                <CostDonut items={stats.costByKind} total={stats.cost} />
               </Card>
             </section>
           ) : null}
@@ -382,15 +393,7 @@ function Kpi({
   );
 }
 
-function CostDonut({
-  items,
-  total,
-  perHa,
-}: {
-  items: { kind: OperationKind; cost: number }[];
-  total: number;
-  perHa: number | null;
-}) {
+function CostDonut({ items, total }: { items: { kind: OperationKind; cost: number }[]; total: number }) {
   const stops = items.map((item, idx) => {
     const before = items.slice(0, idx).reduce((s, i) => s + i.cost, 0);
     return `${KIND_COLOR[item.kind]} ${(before / total) * 100}% ${((before + item.cost) / total) * 100}%`;
@@ -405,8 +408,8 @@ function CostDonut({
       >
         <div className="grid size-[5.5rem] place-items-center rounded-full bg-surface text-center">
           <span>
-            <span className="block text-sm font-semibold">{perHa != null ? formatBRL(perHa) : formatBRL(total)}</span>
-            <span className="block text-[10px] text-muted">{perHa != null ? "por hectare" : "total"}</span>
+            <span className="block text-sm font-semibold">{formatBRL(total)}</span>
+            <span className="block text-[10px] text-muted">em operações</span>
           </span>
         </div>
       </div>

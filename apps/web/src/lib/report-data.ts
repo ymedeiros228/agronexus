@@ -3,7 +3,7 @@ import type { ReportInput } from "./report";
 
 /** Carrega do aparelho tudo o que o relatório usa, só registros vivos de fazendas e talhões vivos. */
 export async function loadReportInput(): Promise<ReportInput> {
-  const [farms, plots, seasons, operations, visits, findings, rainfall, supplies, stockMoves] = await Promise.all([
+  const [farms, plots, seasons, operations, visits, findings, rainfall, supplies, stockMoves, sales, expenses] = await Promise.all([
     db.farms.toArray(),
     db.plots.toArray(),
     db.seasons.toArray(),
@@ -13,6 +13,8 @@ export async function loadReportInput(): Promise<ReportInput> {
     db.rainfall.toArray(),
     db.supplies.toArray(),
     db.stockMoves.toArray(),
+    db.sales.toArray(),
+    db.expenses.toArray(),
   ]);
   const liveFarms = alive(farms);
   const farmIds = new Set(liveFarms.map((f) => f.id));
@@ -28,5 +30,7 @@ export async function loadReportInput(): Promise<ReportInput> {
     rainfall: alive(rainfall).filter((r) => farmIds.has(r.farmId)),
     supplies: alive(supplies),
     stockMoves: alive(stockMoves),
+    sales: alive(sales),
+    expenses: alive(expenses),
   };
 }

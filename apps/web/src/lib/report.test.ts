@@ -94,6 +94,10 @@ const input: ReportInput = {
     move("u2", { kind: "uso", qty: 25, operationId: "a2" }),
     move("u3", { kind: "uso", qty: 40, operationId: "plan" }), // planejada: não entra
   ],
+  sales: [{ ...base("v"), seasonLabel: "2026/27", date: "2027-04-01", bags: 9_600, pricePerBag: 120, buyer: "", note: "" }],
+  expenses: [
+    { ...base("x"), seasonLabel: "2026/27", date: "2026-08-01", category: "arrendamento", description: "", amount: 18_000 },
+  ],
 };
 
 describe("seasonPeriod", () => {
@@ -142,10 +146,16 @@ describe("seasonReport", () => {
     expect(r.rain).toEqual([{ farmName: "Boa Vista", mm: 65.5 }]);
   });
 
-  it("comparação com safras anteriores", () => {
+  it("comparação com safras anteriores, com despesas gerais e margem", () => {
     expect(r.history).toEqual([
-      { label: "2026/27", areaHa: 150, yieldPerHa: 64, costPerHa: 280 },
-      { label: "2025/26", areaHa: 100, yieldPerHa: 50, costPerHa: 990 },
+      // (42.000 + 18.000) / 150 = 400/ha; receita 1.152.000 − 60.000 = 1.092.000 → 7.280/ha
+      { label: "2026/27", areaHa: 150, yieldPerHa: 64, costPerHa: 400, marginPerHa: 7_280 },
+      { label: "2025/26", areaHa: 100, yieldPerHa: 50, costPerHa: 990, marginPerHa: null },
     ]);
+  });
+
+  it("financeiro da safra junto do relatório", () => {
+    expect(r.finance.totalCost).toBe(60_000);
+    expect(r.finance.margin).toBe(1_092_000);
   });
 });

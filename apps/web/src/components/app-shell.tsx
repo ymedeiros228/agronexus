@@ -16,6 +16,7 @@ import {
   Plus,
   Sprout,
   Tractor,
+  Wallet,
   X,
   type LucideIcon,
 } from "lucide-react";
@@ -45,6 +46,13 @@ const SEASONS: NavItem = {
   icon: CalendarRange,
   match: (p) => p.startsWith("/safra"),
 };
+const FINANCE: NavItem = {
+  href: "/financeiro",
+  label: "Financeiro",
+  short: "Financeiro",
+  icon: Wallet,
+  match: (p) => p.startsWith("/financeiro"),
+};
 const SUPPLIES: NavItem = {
   href: "/insumos",
   label: "Insumos e estoque",
@@ -61,9 +69,9 @@ const MONITORING: NavItem = {
 };
 const DATA: NavItem = { href: "/dados", label: "Dados e backup", short: "Dados", icon: HardDrive, match: (p) => p.startsWith("/dados") };
 
-const NAV = [PANEL, FARMS, SEASONS, OPERATIONS, SUPPLIES, MONITORING, DATA];
+const NAV = [PANEL, FARMS, SEASONS, OPERATIONS, SUPPLIES, FINANCE, MONITORING, DATA];
 /** No celular, o que não cabe na barra inferior fica em "Mais". */
-const MORE = [FARMS, SEASONS, SUPPLIES, DATA];
+const MORE = [FARMS, SEASONS, SUPPLIES, FINANCE, DATA];
 
 const NEW_ACTIONS = [
   {
@@ -90,7 +98,7 @@ const NEW_ACTIONS = [
 ];
 
 /** Telas de painel e listas usam a largura toda no computador; formulários ficam estreitos. */
-const WIDE = ["/", "/operacoes", "/visitas", "/fazendas", "/insumos", "/safras", "/safra"];
+const WIDE = ["/", "/operacoes", "/visitas", "/fazendas", "/insumos", "/safras", "/safra", "/financeiro"];
 
 function Logo({ dark = false }: { dark?: boolean }) {
   return (

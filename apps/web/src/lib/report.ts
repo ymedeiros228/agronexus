@@ -1,4 +1,5 @@
 import type {
+  Expense,
   Farm,
   Finding,
   FindingKind,
@@ -6,12 +7,14 @@ import type {
   OperationKind,
   Plot,
   Rainfall,
+  Sale,
   Season,
   StockMove,
   Supply,
   SupplyCategory,
   Visit,
 } from "./db";
+import { seasonFinance, type SeasonFinance } from "./finance";
 import { isLate, isSpent, seasonLabels, seasonStats } from "./operations";
 import { latestSeason, seasonPeriod } from "./season";
 import { stockOf } from "./stock";
@@ -31,6 +34,8 @@ export type ReportInput = {
   rainfall: Rainfall[];
   supplies: Supply[];
   stockMoves: StockMove[];
+  sales: Sale[];
+  expenses: Expense[];
 };
 
 export type PlotLine = {
@@ -64,7 +69,14 @@ export type SupplyLine = {
 
 export type FindingLine = { name: string; kind: FindingKind; visits: number; plots: number };
 
-export type HistoryLine = { label: string; areaHa: number; yieldPerHa: number | null; costPerHa: number | null };
+export type HistoryLine = {
+  label: string;
+  areaHa: number;
+  yieldPerHa: number | null;
+  /** Custo total (operações + despesas gerais) por hectare. */
+  costPerHa: number | null;
+  marginPerHa: number | null;
+};
 
 export type SeasonReport = {
   label: string;
@@ -87,6 +99,7 @@ export type SeasonReport = {
   openOps: number;
   lateOps: number;
   history: HistoryLine[];
+  finance: SeasonFinance;
 };
 
 const byName = (a: string, b: string) => a.localeCompare(b, "pt-BR", { numeric: true });
@@ -199,7 +212,8 @@ export function seasonReport(label: string, input: ReportInput, today: string): 
 
   const history = seasonLabels(input.seasons).map((l) => {
     const s = seasonStats(l, input.seasons, input.plots, input.operations, today);
-    return { label: l, areaHa: s.areaHa, yieldPerHa: s.yieldPerHa, costPerHa: s.costPerHa };
+    const f = seasonFinance(l, s, input.sales, input.expenses);
+    return { label: l, areaHa: s.areaHa, yieldPerHa: s.yieldPerHa, costPerHa: f.costPerHa, marginPerHa: f.marginPerHa };
   });
 
   return {
@@ -222,5 +236,6 @@ export function seasonReport(label: string, input: ReportInput, today: string): 
     openOps: ops.filter((o) => o.status !== "concluida").length,
     lateOps: ops.filter((o) => isLate(o, today)).length,
     history,
+    finance: seasonFinance(label, stats, input.sales, input.expenses),
   };
 }
