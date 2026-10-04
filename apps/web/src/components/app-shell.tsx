@@ -7,8 +7,9 @@ import { OnlineBadge } from "./online-badge";
 
 const items = [
   { href: "/", label: "Início", match: (p: string) => p === "/" },
-  { href: "/visitas/nova", label: "Nova visita", match: (p: string) => p.startsWith("/visitas/nova"), primary: true },
+  { href: "/visitas/nova", label: "Visita", match: (p: string) => p.startsWith("/visitas/nova"), primary: true },
   { href: "/fazendas", label: "Fazendas", match: (p: string) => p.startsWith("/fazenda") },
+  { href: "/dados", label: "Dados", match: (p: string) => p.startsWith("/dados") },
 ];
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -42,7 +43,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                   aria-current={active ? "page" : undefined}
                   className={
                     item.primary
-                      ? "flex min-h-11 items-center rounded-full bg-brand px-5 text-sm font-semibold text-white shadow-sm active:scale-[0.97]"
+                      ? "flex min-h-11 items-center whitespace-nowrap rounded-full bg-brand px-5 text-sm font-semibold text-white shadow-sm active:scale-[0.97]"
                       : `flex min-h-11 items-center rounded-full px-4 text-sm font-medium ${
                           active ? "bg-brand-soft text-brand-strong" : "text-muted"
                         }`

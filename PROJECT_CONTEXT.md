@@ -18,6 +18,7 @@ Rodar localmente (a partir de `apps/web`):
   - Início com retornos pendentes e últimas visitas.
   - Fotos comprimidas no aparelho antes de salvar.
   - PWA: manifesto, ícones, service worker (`public/sw.js`), aviso de "sem internet".
+  - Aba Dados: backup em arquivo JSON (com fotos), restauração que só mescla (nunca apaga), pedido de armazenamento persistente. Ciclo apagar e restaurar verificado no navegador.
 - Verificado no navegador embutido: cadastro de fazenda e talhão, visita completa com foto, persistência no IndexedDB, relatório.
 - Tipos, lint e build de produção passam. Todas as páginas são estáticas.
 
@@ -37,7 +38,7 @@ Rodar localmente (a partir de `apps/web`):
 - Nome/marca/domínio/INPI.
 - Testadores reais (pelo menos 3, perfis diferentes). Há uma estagiária de agronomia como porta de entrada.
 - Servidor, login e sincronização (próxima fase); escolha do provedor de PostgreSQL e hospedagem (ADR futura).
-- Exportar/fazer backup dos dados locais (hoje, se o usuário limpar os dados do navegador, perde tudo).
+- Backup é manual. Sem servidor, quem limpar os dados do navegador sem ter baixado o backup perde tudo.
 - `npm audit` aponta 5 vulnerabilidades altas, todas na cadeia do ESLint (só desenvolvimento). Corrigir com `--force` rebaixaria o eslint-config-next, então ficou como está.
 
 ## Problemas conhecidos
@@ -47,5 +48,4 @@ Rodar localmente (a partir de `apps/web`):
 
 ## Próximas etapas
 1. Testar em celular de verdade (deploy de teste) e validar o fluxo com a primeira pessoa do campo.
-2. Backup/exportação dos dados locais.
-3. Servidor, login e sincronização idempotente.
+2. Servidor, login e sincronização idempotente.

@@ -4,8 +4,8 @@
  * - Na instalação, baixa as páginas principais e seus arquivos para uso offline.
  * Os dados do usuário ficam no IndexedDB, não aqui.
  */
-const CACHE = "agronexus-v1";
-const PAGES = ["/", "/fazendas", "/fazenda", "/visita", "/visitas/nova"];
+const CACHE = "agronexus-v2";
+const PAGES = ["/", "/fazendas", "/fazenda", "/visita", "/visitas/nova", "/dados"];
 const EXTRAS = ["/manifest.webmanifest", "/icon-192.png", "/icon-512.png"];
 
 self.addEventListener("install", (event) => {
