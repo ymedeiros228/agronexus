@@ -6,7 +6,7 @@ Fase 1 em andamento. App web (PWA) em `apps/web`, local-first (dados no IndexedD
 Rodar localmente (a partir de `apps/web`):
 - Desenvolvimento: `npm run dev`
 - Produção (necessária para o service worker): `npm run build` e depois `npx next start -p 3100`
-- Conferência: `npx tsc --noEmit`, `npx eslint`, `npm test` (Vitest, 60 testes)
+- Conferência: `npx tsc --noEmit`, `npx eslint`, `npm test` (Vitest, 70 testes)
 
 ## Concluído
 - Repositório, docs, Plano Mestre, ADRs 0001 a 0007, roadmap por tela.
@@ -20,6 +20,7 @@ Rodar localmente (a partir de `apps/web`):
   - **Safras e relatório da safra**: lista de safras com progresso da colheita; relatório com área, produção, produtividade, custo realizado, custo/ha, custo por saca, por talhão, custo por tipo, insumos usados, fitossanidade, chuva do ano agrícola e comparação entre safras; compartilhar (WhatsApp) e PDF.
   - **Custo realizado x previsto**: só operação concluída ou em andamento entra no custo; planejada aparece como "previsto".
   - **Financeiro da safra**: vendas (sacas, preço líquido, comprador), despesas gerais por categoria, receita, custo total (operações + despesas), margem e margem/ha, ponto de equilíbrio (sc/ha ao preço médio e R$/sc com a produtividade), grão produzido/vendido/a vender, composição do custo. Entra no painel (custo/ha), no relatório e na comparação entre safras.
+  - **Mapa de talhões** (sem satélite, funciona offline): contorno caminhando com GPS (filtra precisão pior que 25 m e pontos a menos de 5 m; tela fica ligada onde o navegador deixa) ou importado de KML/GeoJSON; área e perímetro pelo contorno, botão para usar como área do talhão; mapa da fazenda colorido pela situação; rota até o talhão (abre o app de mapas); exportação KML.
   - **Dados**: backup JSON de todas as tabelas (lista única em `backup.ts`), restauração que só mescla, lembrete de backup no painel, planilhas CSV (visitas, operações com insumos, estoque, vendas e despesas), armazenamento persistente.
   - Banco local na versão 5 (v2: safra na visita, tabela meta; v3: operações; v4: insumos e movimentos de estoque; v5: vendas e despesas). Migrações verificadas no navegador com dados de teste.
 - Tipos, lint, testes e build passam. Todas as páginas são estáticas.
@@ -51,6 +52,9 @@ Rodar localmente (a partir de `apps/web`):
 - Orçamento mensal (não informado). Nome/marca/domínio/INPI.
 - Testadores reais (pelo menos 3). A irmã da fundadora (estagiária de agronomia) é a porta de entrada para produtores.
 - `npm audit`: 5 vulnerabilidades altas na cadeia do ESLint (só desenvolvimento); corrigir com `--force` rebaixaria o eslint-config-next.
+
+## Não verificado
+- Gravação do contorno com GPS de verdade no campo (testado no navegador com posições simuladas). No celular, o navegador pode parar o GPS se a tela apagar.
 
 ## Problemas conhecidos
 - Sem Docker nem PostgreSQL local nesta máquina.

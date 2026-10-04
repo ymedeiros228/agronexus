@@ -30,6 +30,7 @@ export type FarmStatus = {
 
 export type Alert = {
   kind: "followup-overdue" | "followup-today" | "no-visit" | "operation-late";
+  plotId: string;
   farmName: string;
   plotName: string;
   text: string;
@@ -92,6 +93,7 @@ export function buildPanel(input: Input, today: string): { farms: FarmStatus[]; 
       if (inCycle && reference !== null && reference > NO_VISIT_ALERT_DAYS) {
         alerts.push({
           kind: "no-visit",
+          plotId: plot.id,
           farmName: farm.name,
           plotName: plot.name,
           text: lastVisit ? `Sem visita há ${daysSinceVisit} dias` : `Nenhuma visita desde o plantio (${dap} dias)`,
@@ -105,6 +107,7 @@ export function buildPanel(input: Input, today: string): { farms: FarmStatus[]; 
         if (due < today) {
           alerts.push({
             kind: "followup-overdue",
+            plotId: plot.id,
             farmName: farm.name,
             plotName: plot.name,
             text: `Retorno atrasado (era ${ddmm(due)})`,
@@ -114,6 +117,7 @@ export function buildPanel(input: Input, today: string): { farms: FarmStatus[]; 
         } else if (due === today) {
           alerts.push({
             kind: "followup-today",
+            plotId: plot.id,
             farmName: farm.name,
             plotName: plot.name,
             text: "Retorno marcado para hoje",
@@ -126,6 +130,7 @@ export function buildPanel(input: Input, today: string): { farms: FarmStatus[]; 
       for (const o of (input.operations ?? []).filter((x) => x.plotId === plot.id && isLate(x, today))) {
         alerts.push({
           kind: "operation-late",
+          plotId: plot.id,
           farmName: farm.name,
           plotName: plot.name,
           text: `${KIND_NAME[o.kind]} atrasada (prevista para ${ddmm(o.date)})`,

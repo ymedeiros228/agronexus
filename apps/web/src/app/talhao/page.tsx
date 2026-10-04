@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState, type FormEvent } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { Button, Card, Chip, Empty, Field, LinkButton, PageTitle, SectionTitle, inputClass } from "@/components/ui";
+import { BoundaryCard } from "@/components/boundary";
 import { OperationRow } from "@/components/operation-row";
 import { KIND_LABEL } from "@/lib/catalog";
 import { addSeason, alive, db, removePlot, updatePlot, updateSeason, type Finding, type Season, type Visit } from "@/lib/db";
@@ -218,6 +219,8 @@ function Plot() {
           <Empty title="Sem safra" text="Cadastre a safra para acompanhar cultivar e dias após o plantio." />
         )}
       </section>
+
+      <BoundaryCard plot={plot} />
 
       <FindingsSummary visits={currentVisits} findingsByVisit={findingsByVisit} />
 

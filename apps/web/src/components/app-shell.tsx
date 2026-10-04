@@ -9,6 +9,7 @@ import {
   ClipboardList,
   HardDrive,
   LayoutDashboard,
+  Map as MapIcon,
   MapPinned,
   Menu,
   Package,
@@ -39,6 +40,7 @@ const OPERATIONS: NavItem = {
   icon: Tractor,
   match: (p) => p.startsWith("/operac"),
 };
+const MAP: NavItem = { href: "/mapa", label: "Mapa", short: "Mapa", icon: MapIcon, match: (p) => p.startsWith("/mapa") };
 const SEASONS: NavItem = {
   href: "/safras",
   label: "Safras e relatórios",
@@ -69,9 +71,9 @@ const MONITORING: NavItem = {
 };
 const DATA: NavItem = { href: "/dados", label: "Dados e backup", short: "Dados", icon: HardDrive, match: (p) => p.startsWith("/dados") };
 
-const NAV = [PANEL, FARMS, SEASONS, OPERATIONS, SUPPLIES, FINANCE, MONITORING, DATA];
+const NAV = [PANEL, FARMS, MAP, SEASONS, OPERATIONS, SUPPLIES, FINANCE, MONITORING, DATA];
 /** No celular, o que não cabe na barra inferior fica em "Mais". */
-const MORE = [FARMS, SEASONS, SUPPLIES, FINANCE, DATA];
+const MORE = [FARMS, MAP, SEASONS, SUPPLIES, FINANCE, DATA];
 
 const NEW_ACTIONS = [
   {
@@ -98,7 +100,7 @@ const NEW_ACTIONS = [
 ];
 
 /** Telas de painel e listas usam a largura toda no computador; formulários ficam estreitos. */
-const WIDE = ["/", "/operacoes", "/visitas", "/fazendas", "/insumos", "/safras", "/safra", "/financeiro"];
+const WIDE = ["/", "/operacoes", "/visitas", "/fazendas", "/insumos", "/safras", "/safra", "/financeiro", "/mapa"];
 
 function Logo({ dark = false }: { dark?: boolean }) {
   return (
@@ -286,20 +288,34 @@ export function AppShell({ children }: { children: ReactNode }) {
                 <X className="size-5" />
               </button>
             </div>
-            {sheet === "novo"
-              ? NEW_ACTIONS.map((a) => (
-                  <SheetLink key={a.href} href={a.href} icon={a.icon} label={a.label} text={a.text} onClick={() => setSheet(null)} />
-                ))
-              : MORE.map((m) => (
-                  <SheetLink
-                    key={m.href}
-                    href={m.href}
-                    icon={m.icon}
-                    label={m.label}
-                    active={m.match(pathname)}
-                    onClick={() => setSheet(null)}
-                  />
-                ))}
+            {sheet === "novo" ? (
+              NEW_ACTIONS.map((a) => (
+                <SheetLink key={a.href} href={a.href} icon={a.icon} label={a.label} text={a.text} onClick={() => setSheet(null)} />
+              ))
+            ) : (
+              <div className="grid grid-cols-2 gap-2">
+                {MORE.map((m) => {
+                  const Icon = m.icon;
+                  const active = m.match(pathname);
+                  return (
+                    <Link
+                      key={m.href}
+                      href={m.href}
+                      onClick={() => setSheet(null)}
+                      aria-current={active ? "page" : undefined}
+                      className={`flex min-h-20 flex-col items-start justify-between gap-2 rounded-2xl border p-3 active:bg-brand-soft ${
+                        active ? "border-brand bg-brand-soft" : "border-border"
+                      }`}
+                    >
+                      <span className="grid size-9 place-items-center rounded-xl bg-brand-soft text-brand">
+                        <Icon className="size-5" />
+                      </span>
+                      <span className="text-sm font-medium leading-tight">{m.label}</span>
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
       ) : null}

@@ -156,9 +156,14 @@ function Farm() {
       <section className="space-y-3">
         <div className="flex items-center justify-between">
           <SectionTitle>Talhões</SectionTitle>
-          <Button variant="ghost" onClick={() => setPlotOpen((o) => !o)}>
-            {plotOpen ? "Cancelar" : "+ Talhão"}
-          </Button>
+          <div className="flex items-center gap-1">
+            <LinkButton href={`/mapa?fazenda=${farm.id}`} variant="ghost">
+              Mapa
+            </LinkButton>
+            <Button variant="ghost" onClick={() => setPlotOpen((o) => !o)}>
+              {plotOpen ? "Cancelar" : "+ Talhão"}
+            </Button>
+          </div>
         </div>
 
         {plotOpen ? (

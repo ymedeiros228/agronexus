@@ -1,4 +1,5 @@
 import Dexie, { type EntityTable } from "dexie";
+import type { LngLat } from "./geo";
 
 /**
  * Armazenamento local-first (ADR 0004).
@@ -23,6 +24,8 @@ export type Plot = Base & {
   farmId: string;
   name: string;
   areaHa: number | null;
+  /** Contorno [longitude, latitude], gravado pelo GPS ou importado de KML/GeoJSON. */
+  boundary?: LngLat[] | null;
 };
 
 export type Season = Base & {
@@ -256,7 +259,7 @@ export function updateFarm(id: string, patch: Pick<Farm, "name" | "municipality"
   return db.farms.update(id, { ...patch, updatedAt: Date.now() });
 }
 
-export function updatePlot(id: string, patch: Pick<Plot, "name" | "areaHa">) {
+export function updatePlot(id: string, patch: Partial<Pick<Plot, "name" | "areaHa" | "boundary">>) {
   return db.plots.update(id, { ...patch, updatedAt: Date.now() });
 }
 
