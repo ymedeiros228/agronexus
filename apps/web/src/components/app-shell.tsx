@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useState, type ReactNode } from "react";
 import {
   Bug,
+  CalendarRange,
   ClipboardList,
   HardDrive,
   LayoutDashboard,
@@ -37,6 +38,13 @@ const OPERATIONS: NavItem = {
   icon: Tractor,
   match: (p) => p.startsWith("/operac"),
 };
+const SEASONS: NavItem = {
+  href: "/safras",
+  label: "Safras e relatórios",
+  short: "Safras",
+  icon: CalendarRange,
+  match: (p) => p.startsWith("/safra"),
+};
 const SUPPLIES: NavItem = {
   href: "/insumos",
   label: "Insumos e estoque",
@@ -53,9 +61,9 @@ const MONITORING: NavItem = {
 };
 const DATA: NavItem = { href: "/dados", label: "Dados e backup", short: "Dados", icon: HardDrive, match: (p) => p.startsWith("/dados") };
 
-const NAV = [PANEL, FARMS, OPERATIONS, SUPPLIES, MONITORING, DATA];
+const NAV = [PANEL, FARMS, SEASONS, OPERATIONS, SUPPLIES, MONITORING, DATA];
 /** No celular, o que não cabe na barra inferior fica em "Mais". */
-const MORE = [FARMS, SUPPLIES, DATA];
+const MORE = [FARMS, SEASONS, SUPPLIES, DATA];
 
 const NEW_ACTIONS = [
   {
@@ -82,7 +90,7 @@ const NEW_ACTIONS = [
 ];
 
 /** Telas de painel e listas usam a largura toda no computador; formulários ficam estreitos. */
-const WIDE = ["/", "/operacoes", "/visitas", "/fazendas", "/insumos"];
+const WIDE = ["/", "/operacoes", "/visitas", "/fazendas", "/insumos", "/safras", "/safra"];
 
 function Logo({ dark = false }: { dark?: boolean }) {
   return (

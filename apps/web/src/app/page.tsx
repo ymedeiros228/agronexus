@@ -195,7 +195,13 @@ export default function Home() {
             icon={CircleDollarSign}
             label="Custo por hectare"
             value={stats.costPerHa != null ? formatBRL(stats.costPerHa) : "—"}
-            sub={stats.cost > 0 ? `Total ${formatBRL(stats.cost)}` : "Anote o custo nas operações"}
+            sub={
+              stats.cost > 0
+                ? `Realizado ${formatBRL(stats.cost)}${stats.plannedCost > 0 ? ` · previsto +${formatBRL(stats.plannedCost)}` : ""}`
+                : stats.plannedCost > 0
+                  ? `Previsto ${formatBRL(stats.plannedCost)} (nada realizado)`
+                  : "Anote o custo nas operações"
+            }
           />
           <Kpi
             icon={Tractor}
@@ -210,6 +216,12 @@ export default function Home() {
             }
             warn={stats.late > 0}
           />
+          <Link
+            href={`/safra?rotulo=${encodeURIComponent(label!)}`}
+            className="col-span-2 -mt-1 justify-self-end text-sm font-medium text-brand lg:col-span-4"
+          >
+            Relatório da safra {label} ›
+          </Link>
         </div>
       ) : null}
 

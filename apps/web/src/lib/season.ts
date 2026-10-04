@@ -12,6 +12,14 @@ export function nextSeasonLabel(label: string): string {
   return `${start}/${String(start + 1).slice(2)}`;
 }
 
+/** Ano agrícola da safra: "2026/27" vai de 01/07/2026 a 30/06/2027. Rótulo fora do padrão: null. */
+export function seasonPeriod(label: string): { from: string; to: string } | null {
+  const m = /^(\d{4})\/\d{2}$/.exec(label.trim());
+  if (!m) return null;
+  const y = Number(m[1]);
+  return { from: `${y}-07-01`, to: `${y + 1}-06-30` };
+}
+
 /** A safra vigente de um talhão é a cadastrada por último. */
 export function latestSeason<T extends { createdAt: number }>(seasons: T[]): T | undefined {
   return seasons.reduce<T | undefined>((best, s) => (!best || s.createdAt > best.createdAt ? s : best), undefined);

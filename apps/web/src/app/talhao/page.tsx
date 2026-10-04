@@ -10,7 +10,7 @@ import { KIND_LABEL } from "@/lib/catalog";
 import { addSeason, alive, db, removePlot, updatePlot, updateSeason, type Finding, type Season, type Visit } from "@/lib/db";
 import { formatDate, todayISO } from "@/lib/format";
 import { usesByOperation } from "@/lib/stock";
-import { formatBRL, formatNumberBR, yieldByPlot } from "@/lib/operations";
+import { formatBRL, formatNumberBR, isSpent, yieldByPlot } from "@/lib/operations";
 import { daysSince, latestSeason, nextSeasonLabel } from "@/lib/season";
 
 type Panel = "plot" | "season" | "new-season" | null;
@@ -65,7 +65,7 @@ function Plot() {
   const currentVisits = visits.filter((v) => seasonOf(v) === current?.id);
   const currentOps = operations.filter((o) => seasonOf(o) === current?.id);
   const harvest = current ? yieldByPlot(current.label, seasons, currentOps)[0] : undefined;
-  const opCost = currentOps.reduce((s, o) => s + (o.cost ?? 0), 0);
+  const opCost = currentOps.filter(isSpent).reduce((s, o) => s + (o.cost ?? 0), 0);
   const older = seasons.filter((s) => s.id !== current?.id).sort((a, b) => b.createdAt - a.createdAt);
   const findingsByVisit = new Map<string, Finding[]>();
   for (const f of findings) findingsByVisit.set(f.visitId, [...(findingsByVisit.get(f.visitId) ?? []), f]);
@@ -197,7 +197,7 @@ function Plot() {
                   <p className="font-semibold">{harvest ? `${formatNumberBR(harvest.perHa, 1)} sc/ha` : "—"}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-muted">Custo anotado</p>
+                  <p className="text-xs text-muted">Custo realizado</p>
                   <p className="font-semibold">
                     {opCost > 0 ? formatBRL(opCost) : "—"}
                     {opCost > 0 && plot.areaHa ? (

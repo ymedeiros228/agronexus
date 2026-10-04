@@ -14,13 +14,13 @@ Regra que vale para todas as telas: **número no painel só aparece se vier de d
 | 4 | Propriedades | **Pronto (básico)** | Foto da fazenda, busca |
 | 5 | Mapa de talhões | Não iniciada | Desenhar/importar contorno (KML, GeoJSON), imagem de satélite exige internet |
 | 6 | Detalhes do talhão | **Parcial** | Pronto: safra, achados, linha do tempo, operações, produtividade, custo. Falta: solo, altitude, declividade, abas, mapa |
-| 7 | Safras | **Parcial** | Safras ficam dentro de cada talhão; falta a lista geral com progresso |
+| 7 | Safras | **Pronto (básico)** | Lista de safras com talhões, área, produtividade, custo/ha, operações abertas e progresso da colheita |
 | 8 | Operações agrícolas | **Pronto** | Insumos usados (total ou dose/ha) ligados ao estoque |
 | 9 | Insumos e estoque | **Pronto (básico)** | Pronto: cadastro, entrada com valor, contagem (ajuste), baixa automática quando a operação é concluída, previsto para operações abertas, "vai faltar", estoque mínimo, preço médio, planilha. Falta: estoque por depósito/fazenda, lote e validade |
 | 10 | Clima | Parcial (chuva anotada) | Previsão exige internet e um serviço de clima (ex.: Open-Meteo, gratuito) |
 | 11 | Fitossanidade | **Pronto (básico)** | Nível de infestação definido por quem registra (o app não calcula risco sem agrônomo validar) |
-| 12 | Custos | **Parcial** | Pronto: custo por operação, por tipo e por hectare. Falta: custos fora de operação (arrendamento, mão de obra fixa), evolução no tempo |
-| 13 | Relatórios | **Parcial** | Pronto: relatório da visita (WhatsApp/PDF), planilhas de visitas, operações e estoque. Falta: relatório da safra |
+| 12 | Custos | **Parcial** | Pronto: custo realizado (concluídas/em andamento) separado do previsto (planejadas), por tipo, por hectare e por saca; custo estimado dos insumos. Falta: custos fora de operação (arrendamento, mão de obra fixa), receita e margem, evolução no tempo |
+| 13 | Relatórios | **Parcial** | Pronto: relatório da visita (WhatsApp/PDF), relatório da safra (resumo, por talhão, custos, insumos, fitossanidade, chuva, comparação entre safras; WhatsApp/PDF), planilhas de visitas, operações e estoque. Falta: relatório por fazenda/período |
 | 14 | Assistente IA | Não iniciada | ADR 0005: primeiro juntar fotos com diagnóstico confirmado; perguntas sobre os próprios dados vêm depois da sincronização |
 | 15 | App mobile | **Pronto (PWA)** | Instalação na tela inicial e offline testados num celular real (precisa de hospedagem) |
 
@@ -31,6 +31,6 @@ Regra que vale para todas as telas: **número no painel só aparece se vier de d
 3. ~~**Insumos e estoque** (9) ligados às operações.~~ Feito (básico).
 4. **Mapa de talhões** (5) e área calculada pelo contorno.
 5. **Clima** (10) com previsão.
-6. **Relatório da safra** (13) e comparação entre safras (3, 12).
+6. ~~**Relatório da safra** (13) e comparação entre safras (3, 12).~~ Feito (básico).
 7. **Página pública** (1), quando houver nome e marca.
 8. **IA** (14), conforme ADR 0005.

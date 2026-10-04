@@ -157,10 +157,13 @@ describe("estoque no banco", () => {
       { supplyId: c, qty: 3 },
     ]);
     const uses = alive(await db.stockMoves.where("operationId").equals(id).toArray());
-    expect(uses.map((m) => [m.supplyId, m.qty]).sort()).toEqual([
-      [a, 12],
-      [c, 3],
-    ]);
+    expect(uses.map((m) => [m.supplyId, m.qty])).toHaveLength(2);
+    expect(uses.map((m) => [m.supplyId, m.qty])).toEqual(
+      expect.arrayContaining([
+        [a, 12],
+        [c, 3],
+      ]),
+    );
     expect(uses.find((m) => m.supplyId === a)?.id).toBe(ma.id);
     expect((await currentStock(b))?.balance).toBe(0); // uso removido devolve ao saldo
   });

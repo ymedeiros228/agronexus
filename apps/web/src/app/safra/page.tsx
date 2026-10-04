@@ -1,0 +1,337 @@
+"use client";
+
+import Link from "next/link";
+import { Suspense, useState, type ReactNode } from "react";
+import { useSearchParams } from "next/navigation";
+import { useLiveQuery } from "dexie-react-hooks";
+import { Button, Card, Empty, LinkButton, SectionTitle } from "@/components/ui";
+import { KIND_LABEL } from "@/lib/catalog";
+import { formatDate, todayISO } from "@/lib/format";
+import { KIND_NAME, formatBRL, formatNumberBR, seasonLabels } from "@/lib/operations";
+import { seasonReport, type SeasonReport } from "@/lib/report";
+import { loadReportInput } from "@/lib/report-data";
+import { CATEGORY_NAME, formatQty } from "@/lib/stock";
+
+const sc = (n: number | null) => (n != null ? `${formatNumberBR(n, 1)} sc/ha` : "—");
+const brl = (n: number | null) => (n != null ? formatBRL(n) : "—");
+const day = (iso: string | null) => (iso ? formatDate(iso) : "—");
+
+function summaryText(r: SeasonReport, farms: string): string {
+  const lines = [
+    `AgroNexus · Relatório da safra ${r.label}`,
+    farms,
+    "",
+    `Área: ${formatNumberBR(r.areaHa, 1)} ha (${r.plots.length} ${r.plots.length === 1 ? "talhão" : "talhões"})`,
+    r.yieldPerHa != null
+      ? `Produtividade: ${sc(r.yieldPerHa)} (${formatNumberBR(r.bags, 0)} sacas em ${formatNumberBR(r.harvestedHa, 1)} ha colhidos)`
+      : "Produtividade: colheita ainda não registrada",
+    r.cost > 0 ? `Custo realizado: ${formatBRL(r.cost)}${r.costPerHa != null ? ` (${formatBRL(r.costPerHa)}/ha)` : ""}` : null,
+    r.costPerBag != null ? `Custo por saca: ${formatBRL(r.costPerBag, 2)}` : null,
+    "",
+    "Por talhão:",
+    ...r.plots.map(
+      (p) =>
+        `• ${p.plotName}${p.cultivar ? ` (${p.cultivar})` : ""}: ${sc(p.yieldPerHa)}${p.costPerHa != null ? ` · ${formatBRL(p.costPerHa)}/ha` : ""}`,
+    ),
+    r.findings.length ? "" : null,
+    r.findings.length ? `Ocorrências mais vistas: ${r.findings.slice(0, 3).map((f) => f.name).join(", ")}` : null,
+  ];
+  return lines.filter((l) => l !== null).join("\n");
+}
+
+function Report() {
+  const label = useSearchParams().get("rotulo") ?? "";
+  const [feedback, setFeedback] = useState("");
+  const data = useLiveQuery(async () => {
+    const input = await loadReportInput();
+    const today = todayISO();
+    return { input, today, labels: seasonLabels(input.seasons) };
+  });
+
+  if (!data) return null;
+  if (!data.labels.includes(label)) {
+    return (
+      <Empty
+        title="Safra não encontrada"
+        text="Escolha uma safra na lista."
+        action={<LinkButton href="/safras">Ver safras</LinkButton>}
+      />
+    );
+  }
+
+  const r = seasonReport(label, data.input, data.today);
+  const farmNames = [...new Set(r.plots.map((p) => p.farmName))].join(", ");
+  const maxKind = Math.max(...r.costByKind.map((k) => k.cost), 1);
+
+  async function share() {
+    const text = summaryText(r, farmNames);
+    try {
+      if (navigator.share) {
+        await navigator.share({ text });
+        return;
+      }
+      await navigator.clipboard.writeText(text);
+      setFeedback("Resumo copiado. Cole no WhatsApp.");
+    } catch {
+      /* compartilhamento cancelado */
+    }
+  }
+
+  return (
+    <>
+      <div className="no-print">
+        <Link href="/safras" className="text-sm text-brand">
+          ← Safras
+        </Link>
+      </div>
+
+      <header className="space-y-1">
+        <p className="text-xs font-semibold uppercase tracking-wider text-muted">Relatório da safra</p>
+        <h1 className="text-2xl font-semibold tracking-tight">Safra {r.label}</h1>
+        <p className="text-sm text-muted">
+          {farmNames || "Sem fazenda"} · gerado em {formatDate(data.today)}
+        </p>
+      </header>
+
+      <div className="no-print grid grid-cols-2 gap-2 sm:max-w-sm">
+        <Button onClick={share}>Compartilhar</Button>
+        <Button variant="secondary" onClick={() => window.print()}>
+          PDF / imprimir
+        </Button>
+      </div>
+      {feedback ? (
+        <p role="status" className="no-print rounded-xl bg-brand-soft px-3 py-2 text-sm text-brand-strong">
+          {feedback}
+        </p>
+      ) : null}
+
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <Stat label="Área" value={`${formatNumberBR(r.areaHa, 1)} ha`} sub={`${r.plots.length} ${r.plots.length === 1 ? "talhão" : "talhões"}`} />
+        <Stat
+          label="Produção"
+          value={r.bags > 0 ? `${formatNumberBR(r.bags, 0)} sc` : "—"}
+          sub={r.harvestedHa > 0 ? `${formatNumberBR(r.harvestedHa, 1)} ha colhidos` : "Colheita não registrada"}
+        />
+        <Stat label="Produtividade" value={sc(r.yieldPerHa)} sub="Sacas de 60 kg por hectare colhido" />
+        <Stat
+          label="Custo realizado"
+          value={r.cost > 0 ? formatBRL(r.cost) : "—"}
+          sub={r.plannedCost > 0 ? `Previsto ainda: ${formatBRL(r.plannedCost)}` : "Operações concluídas e em andamento"}
+        />
+        <Stat label="Custo por hectare" value={brl(r.costPerHa)} sub="Custo realizado ÷ área" />
+        <Stat label="Custo por saca" value={r.costPerBag != null ? formatBRL(r.costPerBag, 2) : "—"} sub="Custo/ha ÷ produtividade" />
+      </div>
+
+      {r.openOps > 0 ? (
+        <Card className={`text-sm ${r.lateOps ? "border-danger/40" : ""}`}>
+          {r.openOps} {r.openOps === 1 ? "operação ainda aberta" : "operações ainda abertas"}
+          {r.lateOps ? `, ${r.lateOps} atrasada${r.lateOps > 1 ? "s" : ""}` : ""}. Os números mudam quando forem concluídas.{" "}
+          <Link href="/operacoes" className="no-print font-medium text-brand underline">
+            Ver operações
+          </Link>
+        </Card>
+      ) : null}
+
+      <Section title="Por talhão">
+        <Card className="overflow-x-auto p-0">
+          <table className="w-full min-w-[640px] text-left text-sm">
+            <thead className="border-b border-border text-xs text-muted">
+              <tr>
+                <Th>Talhão</Th>
+                <Th>Cultivar</Th>
+                <Th>Plantio</Th>
+                <Th>Colheita</Th>
+                <Th right>Área</Th>
+                <Th right>Produtividade</Th>
+                <Th right>Custo/ha</Th>
+                <Th right>Visitas</Th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {r.plots.map((p) => (
+                <tr key={p.plotId}>
+                  <Td>
+                    <Link href={`/talhao?id=${p.plotId}`} className="font-medium text-brand">
+                      {p.plotName}
+                    </Link>
+                    <span className="block text-xs text-muted">{p.farmName}</span>
+                  </Td>
+                  <Td>{p.cultivar || "—"}</Td>
+                  <Td>{day(p.plantingDate)}</Td>
+                  <Td>{day(p.harvestDate)}</Td>
+                  <Td right>{p.areaHa != null ? `${formatNumberBR(p.areaHa, 1)} ha` : "—"}</Td>
+                  <Td right>{sc(p.yieldPerHa)}</Td>
+                  <Td right>{brl(p.costPerHa)}</Td>
+                  <Td right>{p.visits}</Td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Card>
+      </Section>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        {r.costByKind.length ? (
+          <Section title="Custo realizado por tipo de operação">
+            <Card className="space-y-3">
+              {r.costByKind.map((k) => (
+                <div key={k.kind} className="space-y-1">
+                  <div className="flex justify-between gap-2 text-sm">
+                    <span>{KIND_NAME[k.kind]}</span>
+                    <span className="font-medium">
+                      {formatBRL(k.cost)}
+                      {r.areaHa > 0 ? <span className="font-normal text-muted"> · {formatBRL(k.cost / r.areaHa)}/ha</span> : null}
+                    </span>
+                  </div>
+                  <div className="h-2 overflow-hidden rounded-full bg-border/60">
+                    <div className="h-full rounded-full bg-brand" style={{ width: `${(k.cost / maxKind) * 100}%` }} />
+                  </div>
+                </div>
+              ))}
+            </Card>
+          </Section>
+        ) : null}
+
+        {r.supplies.length ? (
+          <Section title="Insumos usados (operações concluídas)">
+            <Card className="divide-y divide-border p-0">
+              {r.supplies.map((s) => (
+                <div key={s.supplyId} className="flex items-start justify-between gap-3 p-3.5 text-sm">
+                  <span className="min-w-0">
+                    <span className="block font-medium">{s.name}</span>
+                    <span className="block text-xs text-muted">{CATEGORY_NAME[s.category]}</span>
+                  </span>
+                  <span className="shrink-0 text-right">
+                    <span className="block font-medium">{formatQty(s.qty, s.unit)}</span>
+                    <span className="block text-xs text-muted">
+                      {s.perHa != null ? `${formatNumberBR(s.perHa, 3)} ${s.unit}/ha` : ""}
+                      {s.estCost != null ? ` · ≈ ${formatBRL(s.estCost)}` : ""}
+                    </span>
+                  </span>
+                </div>
+              ))}
+            </Card>
+          </Section>
+        ) : null}
+
+        <Section title={`Fitossanidade (${r.visits} ${r.visits === 1 ? "visita" : "visitas"})`}>
+          {r.findings.length ? (
+            <Card className="divide-y divide-border p-0">
+              {r.findings.map((f) => (
+                <div key={f.name} className="flex items-center justify-between gap-3 p-3.5 text-sm">
+                  <span className="min-w-0">
+                    <span className="block font-medium">{f.name}</span>
+                    <span className="block text-xs text-muted">{KIND_LABEL[f.kind]}</span>
+                  </span>
+                  <span className="shrink-0 text-right text-xs text-muted">
+                    em {f.visits} {f.visits === 1 ? "visita" : "visitas"}
+                    <span className="block">
+                      {f.plots} {f.plots === 1 ? "talhão" : "talhões"}
+                    </span>
+                  </span>
+                </div>
+              ))}
+            </Card>
+          ) : (
+            <Card>
+              <p className="text-sm text-muted">{r.visits ? "Nenhuma ocorrência anotada nas visitas." : "Nenhuma visita registrada nesta safra."}</p>
+            </Card>
+          )}
+        </Section>
+
+        {r.rain.length ? (
+          <Section title="Chuva anotada no ano agrícola">
+            <Card className="space-y-2 text-sm">
+              {r.rain.map((x) => (
+                <p key={x.farmName} className="flex justify-between gap-3">
+                  <span>{x.farmName}</span>
+                  <span className="font-medium">{formatNumberBR(x.mm, 1)} mm</span>
+                </p>
+              ))}
+              {r.period ? (
+                <p className="text-xs text-muted">
+                  De {formatDate(r.period.from)} a {formatDate(r.period.to)}, só o que foi anotado no app.
+                </p>
+              ) : null}
+            </Card>
+          </Section>
+        ) : null}
+      </div>
+
+      {r.history.length > 1 ? (
+        <Section title="Comparação entre safras">
+          <Card className="overflow-x-auto p-0">
+            <table className="w-full min-w-[420px] text-left text-sm">
+              <thead className="border-b border-border text-xs text-muted">
+                <tr>
+                  <Th>Safra</Th>
+                  <Th right>Área</Th>
+                  <Th right>Produtividade</Th>
+                  <Th right>Custo/ha</Th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {r.history.map((h) => (
+                  <tr key={h.label} className={h.label === r.label ? "bg-brand-soft/60 font-medium" : ""}>
+                    <Td>
+                      {h.label === r.label ? (
+                        h.label
+                      ) : (
+                        <Link href={`/safra?rotulo=${encodeURIComponent(h.label)}`} className="text-brand">
+                          {h.label}
+                        </Link>
+                      )}
+                    </Td>
+                    <Td right>{h.areaHa ? `${formatNumberBR(h.areaHa, 1)} ha` : "—"}</Td>
+                    <Td right>{sc(h.yieldPerHa)}</Td>
+                    <Td right>{brl(h.costPerHa)}</Td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </Card>
+        </Section>
+      ) : null}
+
+      <p className="text-xs text-muted">
+        Calculado só com o que foi registrado no AgroNexus. Custo realizado = operações concluídas ou em andamento.
+        Custo dos insumos é estimado pelo preço médio das entradas.
+      </p>
+    </>
+  );
+}
+
+function Section({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="space-y-3 break-inside-avoid">
+      <SectionTitle>{title}</SectionTitle>
+      {children}
+    </section>
+  );
+}
+
+function Stat({ label, value, sub }: { label: string; value: string; sub: string }) {
+  return (
+    <Card className="p-3.5 sm:p-4">
+      <span className="block text-xs text-muted">{label}</span>
+      <span className="block text-xl font-semibold tracking-tight">{value}</span>
+      <span className="block text-xs text-muted">{sub}</span>
+    </Card>
+  );
+}
+
+function Th({ children, right = false }: { children: ReactNode; right?: boolean }) {
+  return <th className={`px-3.5 py-2.5 font-medium ${right ? "text-right" : ""}`}>{children}</th>;
+}
+
+function Td({ children, right = false }: { children: ReactNode; right?: boolean }) {
+  return <td className={`px-3.5 py-2.5 align-top ${right ? "whitespace-nowrap text-right tabular-nums" : ""}`}>{children}</td>;
+}
+
+export default function SeasonReportPage() {
+  return (
+    <Suspense fallback={null}>
+      <Report />
+    </Suspense>
+  );
+}

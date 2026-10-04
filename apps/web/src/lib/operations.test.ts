@@ -97,6 +97,20 @@ describe("estatísticas da safra", () => {
     expect(s.doneToday).toBe(1); // h
   });
 
+  it("custo de operação planejada é previsão: não entra no custo por hectare", () => {
+    const s = seasonStats(
+      "2026/27",
+      seasons,
+      plots,
+      [op("a", { cost: 15_000 }), op("b", { status: "andamento", cost: 3_000 }), op("c", { status: "planejada", cost: 9_000 })],
+      TODAY,
+    );
+    expect(s.cost).toBe(18_000);
+    expect(s.plannedCost).toBe(9_000);
+    expect(s.costPerHa).toBe(120);
+    expect(s.costByKind).toEqual([{ kind: "aplicacao", cost: 18_000 }]);
+  });
+
   it("sem custo anotado não inventa custo por hectare; sem colheita não há produtividade", () => {
     const s = seasonStats("2026/27", seasons, plots, [op("a", {})], TODAY);
     expect(s.costPerHa).toBeNull();

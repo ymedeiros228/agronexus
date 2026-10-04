@@ -153,11 +153,19 @@ export async function completeOperation(id: string, today: string) {
   await saveOperation({ ...operationInput(op), status: "concluida", doneDate: today }, today, id);
 }
 
+/** Custo já gasto: operação concluída ou em andamento. Planejada é previsão, não gasto. */
+export function isSpent(op: Pick<Operation, "status">): boolean {
+  return op.status !== "planejada";
+}
+
 export type SeasonStats = {
   /** Talhões que têm safra com este rótulo e a soma da área deles. */
   plots: number;
   areaHa: number;
+  /** Custo realizado (operações concluídas ou em andamento). */
   cost: number;
+  /** Custo anotado em operações planejadas. */
+  plannedCost: number;
   costPerHa: number | null;
   costByKind: { kind: OperationKind; cost: number }[];
   harvestedHa: number;
@@ -186,8 +194,13 @@ export function seasonStats(
 
   const byKind = new Map<OperationKind, number>();
   let cost = 0;
+  let plannedCost = 0;
   for (const o of ops) {
     if (o.cost == null) continue;
+    if (!isSpent(o)) {
+      plannedCost += o.cost;
+      continue;
+    }
     cost += o.cost;
     byKind.set(o.kind, (byKind.get(o.kind) ?? 0) + o.cost);
   }
@@ -200,6 +213,7 @@ export function seasonStats(
     plots: plotIds.size,
     areaHa,
     cost,
+    plannedCost,
     costPerHa: cost > 0 && areaHa > 0 ? cost / areaHa : null,
     costByKind: [...byKind.entries()].map(([kind, c]) => ({ kind, cost: c })).sort((a, b) => b.cost - a.cost),
     harvestedHa,

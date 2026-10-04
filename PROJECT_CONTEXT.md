@@ -6,7 +6,7 @@ Fase 1 em andamento. App web (PWA) em `apps/web`, local-first (dados no IndexedD
 Rodar localmente (a partir de `apps/web`):
 - Desenvolvimento: `npm run dev`
 - Produção (necessária para o service worker): `npm run build` e depois `npx next start -p 3100`
-- Conferência: `npx tsc --noEmit`, `npx eslint`, `npm test` (Vitest, 48 testes)
+- Conferência: `npx tsc --noEmit`, `npx eslint`, `npm test` (Vitest, 56 testes)
 
 ## Concluído
 - Repositório, docs, Plano Mestre, ADRs 0001 a 0007, roadmap por tela.
@@ -17,6 +17,8 @@ Rodar localmente (a partir de `apps/web`):
   - **Monitoramento**: visita com estágio, achados, fotos com diagnóstico e GPS, recomendação, retorno; editar visita; relatório (WhatsApp/PDF); tela de ocorrências e lista de visitas.
   - **Operações**: preparo, plantio, adubação, aplicação, colheita, outro; planejada/em andamento/concluída; área, custo, sacas colhidas (produtividade); atalho para concluir; plantio concluído preenche a data de plantio vazia da safra.
   - **Insumos e estoque**: cadastro (nome do produtor, categoria, unidade, estoque mínimo), entrada com valor pago, contagem que lança a diferença como ajuste, insumos na operação (total ou dose por hectare), baixa só quando a operação é concluída, "previsto" para operações abertas, aviso "vai faltar"/estoque baixo/saldo negativo no painel, preço médio das entradas, sugestão de custo da operação pelos insumos. Insumo usado em operação não pode ser excluído.
+  - **Safras e relatório da safra**: lista de safras com progresso da colheita; relatório com área, produção, produtividade, custo realizado, custo/ha, custo por saca, por talhão, custo por tipo, insumos usados, fitossanidade, chuva do ano agrícola e comparação entre safras; compartilhar (WhatsApp) e PDF.
+  - **Custo realizado x previsto**: só operação concluída ou em andamento entra no custo; planejada aparece como "previsto".
   - **Dados**: backup JSON (com fotos, operações e estoque), restauração que só mescla, lembrete de backup no painel, planilhas CSV (visitas, operações com insumos, estoque), armazenamento persistente.
   - Banco local na versão 4 (v2: safra na visita, tabela meta; v3: operações; v4: insumos e movimentos de estoque). Migrações verificadas no navegador com dados de teste.
 - Tipos, lint, testes e build passam. Todas as páginas são estáticas.
@@ -38,6 +40,8 @@ Rodar localmente (a partir de `apps/web`):
 - Catálogo de estágios, pragas e doenças é preliminar; sem níveis de ação nem recomendação de produto.
 - Estoque é um só para a conta (não separa por fazenda/depósito). Preço médio = valor pago nas entradas ÷ quantidade dessas entradas (média simples, não móvel).
 - Uso de insumo de operação planejada não baixa o saldo; aparece como "previsto".
+- Ano agrícola da safra: 1º de julho a 30 de junho (chuva do relatório usa esse período).
+- Custo por saca = custo por hectare ÷ produtividade (funciona mesmo com colheita parcial).
 
 ## Pendente
 - **Hospedagem de teste (HTTPS)**: necessária para testar no celular e o offline real (o navegador embutido não registra service worker). Opções levantadas em 2026-10-04, aguardando escolha da fundadora.
