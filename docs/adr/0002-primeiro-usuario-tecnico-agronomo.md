@@ -1,6 +1,6 @@
 # ADR 0002 — Primeiro usuário: técnico ou agrônomo que visita fazendas
 
-- Status: aceita como hipótese (2026-10-03). A confirmar nas primeiras conversas com usuários reais.
+- Status: substituída pela ADR 0007 (2026-10-03). O cliente é o produtor / gestor; o técnico é quem registra ou valida.
 
 ## Contexto
 A soja do Maranhão é feita em fazendas grandes, com monitoramento de pragas e doenças feito em visitas. Quem visita precisa registrar o que viu, recomendar e voltar para acompanhar. O produtor recebe o resultado, mas quem preenche é o técnico.

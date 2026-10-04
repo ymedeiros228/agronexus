@@ -35,6 +35,8 @@ export type Season = Base & {
 export type Visit = Base & {
   farmId: string;
   plotId: string;
+  /** Safra do talhão no dia da visita. Ausente em visitas de backups antigos. */
+  seasonId?: string | null;
   date: string; // AAAA-MM-DD
   stage: string;
   observations: string;
@@ -69,6 +71,9 @@ export type Rainfall = Base & {
   mm: number;
 };
 
+/** Configurações deste aparelho (não vão para o backup). */
+export type Meta = { key: string; value: unknown };
+
 class AgroDB extends Dexie {
   farms!: EntityTable<Farm, "id">;
   plots!: EntityTable<Plot, "id">;
@@ -77,6 +82,7 @@ class AgroDB extends Dexie {
   findings!: EntityTable<Finding, "id">;
   photos!: EntityTable<Photo, "id">;
   rainfall!: EntityTable<Rainfall, "id">;
+  meta!: EntityTable<Meta, "key">;
 
   constructor() {
     super("agronexus");
@@ -89,6 +95,26 @@ class AgroDB extends Dexie {
       photos: "id, visitId, updatedAt",
       rainfall: "id, farmId, date, updatedAt",
     });
+    // v2: visita guarda a safra; tabela meta para configurações locais.
+    this.version(2)
+      .stores({
+        visits: "id, farmId, plotId, seasonId, date, updatedAt",
+        meta: "key",
+      })
+      .upgrade(async (tx) => {
+        const latest = new Map<string, Season>();
+        for (const s of (await tx.table<Season>("seasons").toArray()).filter((r) => !r.deletedAt)) {
+          const cur = latest.get(s.plotId);
+          if (!cur || s.createdAt > cur.createdAt) latest.set(s.plotId, s);
+        }
+        // Migração não é edição do usuário: updatedAt fica como estava.
+        await tx
+          .table<Visit>("visits")
+          .toCollection()
+          .modify((v) => {
+            if (v.seasonId === undefined) v.seasonId = latest.get(v.plotId)?.id ?? null;
+          });
+      });
   }
 }
 
@@ -103,16 +129,63 @@ export function alive<T extends { deletedAt?: number }>(rows: T[]): T[] {
   return rows.filter((r) => !r.deletedAt);
 }
 
-export function removeRainfall(id: string) {
+function gone() {
   const now = Date.now();
-  return db.rainfall.update(id, { deletedAt: now, updatedAt: now });
+  return { deletedAt: now, updatedAt: now };
+}
+
+export function removeRainfall(id: string) {
+  return db.rainfall.update(id, gone());
 }
 
 export function removeVisit(id: string) {
-  const now = Date.now();
-  return db.visits.update(id, { deletedAt: now, updatedAt: now });
+  return db.visits.update(id, gone());
 }
 
 export function setFollowUpDone(id: string, done: boolean) {
   return db.visits.update(id, { followUpDone: done, updatedAt: Date.now() });
+}
+
+export function updateFarm(id: string, patch: Pick<Farm, "name" | "municipality" | "owner">) {
+  return db.farms.update(id, { ...patch, updatedAt: Date.now() });
+}
+
+export function updatePlot(id: string, patch: Pick<Plot, "name" | "areaHa">) {
+  return db.plots.update(id, { ...patch, updatedAt: Date.now() });
+}
+
+export function updateSeason(id: string, patch: Pick<Season, "label" | "cultivar" | "plantingDate">) {
+  return db.seasons.update(id, { ...patch, updatedAt: Date.now() });
+}
+
+export function addSeason(plotId: string, data: Pick<Season, "label" | "cultivar" | "plantingDate">) {
+  return db.seasons.add({ ...newBase(), plotId, ...data });
+}
+
+/** Remove o talhão e as visitas dele (exclusão lógica). */
+export async function removePlot(id: string) {
+  const mark = gone();
+  await db.transaction("rw", db.plots, db.visits, async () => {
+    await db.plots.update(id, mark);
+    await db.visits.where("plotId").equals(id).filter((v) => !v.deletedAt).modify(mark);
+  });
+}
+
+/** Remove a fazenda com talhões, visitas e chuvas (exclusão lógica). */
+export async function removeFarm(id: string) {
+  const mark = gone();
+  await db.transaction("rw", [db.farms, db.plots, db.visits, db.rainfall], async () => {
+    await db.farms.update(id, mark);
+    await db.plots.where("farmId").equals(id).filter((r) => !r.deletedAt).modify(mark);
+    await db.visits.where("farmId").equals(id).filter((r) => !r.deletedAt).modify(mark);
+    await db.rainfall.where("farmId").equals(id).filter((r) => !r.deletedAt).modify(mark);
+  });
+}
+
+export async function getMeta<T>(key: string): Promise<T | undefined> {
+  return (await db.meta.get(key))?.value as T | undefined;
+}
+
+export function setMeta(key: string, value: unknown) {
+  return db.meta.put({ key, value });
 }

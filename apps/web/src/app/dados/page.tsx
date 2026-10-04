@@ -3,13 +3,25 @@
 import { useEffect, useState, type ChangeEvent } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { Button, Card, PageTitle, SectionTitle } from "@/components/ui";
-import { countLocalRecords, exportBackup, importBackup } from "@/lib/backup";
+import { LAST_BACKUP_KEY, countLocalRecords, exportBackup, importBackup, markBackupDone } from "@/lib/backup";
+import { exportVisitsCsv } from "@/lib/csv";
+import { getMeta } from "@/lib/db";
 import { todayISO } from "@/lib/format";
 
 type StorageInfo = { persisted: boolean; usedMB: number | null };
 
+function saveFile(blob: Blob, name: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
+
 export default function DataPage() {
   const counts = useLiveQuery(() => countLocalRecords());
+  const lastBackupAt = useLiveQuery(async () => (await getMeta<number>(LAST_BACKUP_KEY)) ?? null);
   const [storage, setStorage] = useState<StorageInfo | null>(null);
   const [message, setMessage] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -41,16 +53,25 @@ export default function DataPage() {
   async function download() {
     setBusy(true);
     try {
-      const blob = await exportBackup();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `agronexus-backup-${todayISO()}.json`;
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+      // Marca o início: o que mudar enquanto o arquivo é gerado conta como "fora do backup".
+      const startedAt = Date.now();
+      saveFile(await exportBackup(), `agronexus-backup-${todayISO()}.json`);
+      await markBackupDone(startedAt);
       setMessage({ tone: "ok", text: "Backup gerado. Guarde o arquivo em um lugar seguro (Drive, e-mail ou WhatsApp para você)." });
     } catch {
       setMessage({ tone: "error", text: "Não foi possível gerar o backup." });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function downloadCsv() {
+    setBusy(true);
+    try {
+      saveFile(await exportVisitsCsv(), `agronexus-visitas-${todayISO()}.csv`);
+      setMessage({ tone: "ok", text: "Planilha gerada. Abre no Excel ou no Google Planilhas." });
+    } catch {
+      setMessage({ tone: "error", text: "Não foi possível gerar a planilha." });
     } finally {
       setBusy(false);
     }
@@ -104,6 +125,13 @@ export default function DataPage() {
           <p className="text-sm text-muted">
             Gera um arquivo com tudo: fazendas, visitas e fotos. Restaurar nunca apaga nada, só acrescenta o que falta.
           </p>
+          {lastBackupAt !== undefined ? (
+            <p className="text-sm">
+              {lastBackupAt
+                ? `Último backup: ${new Date(lastBackupAt).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}`
+                : "Nenhum backup feito neste aparelho ainda."}
+            </p>
+          ) : null}
           <Button onClick={download} disabled={busy} className="w-full">
             Baixar backup
           </Button>
@@ -111,6 +139,19 @@ export default function DataPage() {
             Restaurar de um arquivo
             <input type="file" accept="application/json,.json" className="sr-only" onChange={restore} disabled={busy} />
           </label>
+        </Card>
+      </section>
+
+      <section className="space-y-3">
+        <SectionTitle>Planilha</SectionTitle>
+        <Card className="space-y-3">
+          <p className="text-sm text-muted">
+            Todas as visitas em uma planilha, uma linha por achado. Serve para enviar ao produtor ou à empresa. Não
+            inclui fotos.
+          </p>
+          <Button variant="secondary" onClick={downloadCsv} disabled={busy || !counts?.visits} className="w-full">
+            Baixar planilha (Excel)
+          </Button>
         </Card>
       </section>
 

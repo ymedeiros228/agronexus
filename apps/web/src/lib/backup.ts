@@ -1,4 +1,4 @@
-import { db, type Farm, type Finding, type Photo, type Plot, type Rainfall, type Season, type Visit } from "./db";
+import { db, setMeta, type Farm, type Finding, type Photo, type Plot, type Rainfall, type Season, type Visit } from "./db";
 
 /**
  * Backup e restauração dos dados locais em um único arquivo JSON.
@@ -8,13 +8,12 @@ import { db, type Farm, type Finding, type Photo, type Plot, type Rainfall, type
 
 const VERSION = 1;
 
-function blobToDataUrl(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(blob);
-  });
+async function blobToDataUrl(blob: Blob): Promise<string> {
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  let bin = "";
+  // Em blocos, para não estourar a pilha com fotos grandes.
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return `data:${blob.type || "application/octet-stream"};base64,${btoa(bin)}`;
 }
 
 async function dataUrlToBlob(url: string): Promise<Blob> {
@@ -56,6 +55,13 @@ export async function exportBackup(): Promise<Blob> {
     rainfall,
   };
   return new Blob([JSON.stringify(payload)], { type: "application/json" });
+}
+
+export const LAST_BACKUP_KEY = "lastBackupAt";
+
+/** Chamar depois que o arquivo de backup foi entregue ao usuário. */
+export function markBackupDone(at: number) {
+  return setMeta(LAST_BACKUP_KEY, at);
 }
 
 type Row = { id: string; updatedAt: number };

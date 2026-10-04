@@ -6,7 +6,7 @@ import type { ReactNode } from "react";
 import { OnlineBadge } from "./online-badge";
 
 const items = [
-  { href: "/", label: "Início", match: (p: string) => p === "/" },
+  { href: "/", label: "Painel", match: (p: string) => p === "/" },
   { href: "/visitas/nova", label: "Visita", match: (p: string) => p.startsWith("/visitas/nova"), primary: true },
   { href: "/fazendas", label: "Fazendas", match: (p: string) => p.startsWith("/fazenda") },
   { href: "/dados", label: "Dados", match: (p: string) => p.startsWith("/dados") },

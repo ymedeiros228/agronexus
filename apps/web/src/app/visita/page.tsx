@@ -2,31 +2,14 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
+import { BlobImg } from "@/components/blob-img";
 import { Button, Card, Chip, Empty, LinkButton, SectionTitle } from "@/components/ui";
 import { KIND_LABEL } from "@/lib/catalog";
 import { alive, db, removeVisit, setFollowUpDone } from "@/lib/db";
 import { formatDate } from "@/lib/format";
-
-function PhotoImg({ blob, alt }: { blob: Blob; alt: string }) {
-  const [url, setUrl] = useState<string>();
-  useEffect(() => {
-    let active = true;
-    const u = URL.createObjectURL(blob);
-    // setState fora do corpo síncrono do efeito; também funciona no modo estrito do React.
-    Promise.resolve().then(() => {
-      if (active) setUrl(u);
-    });
-    return () => {
-      active = false;
-      URL.revokeObjectURL(u);
-    };
-  }, [blob]);
-  if (!url) return <div className="aspect-square rounded-xl bg-border/50" />;
-  // eslint-disable-next-line @next/next/no-img-element
-  return <img src={url} alt={alt} className="aspect-square w-full rounded-xl object-cover" />;
-}
+import { daysSince, latestSeason } from "@/lib/season";
 
 export default function VisitPage() {
   return (
@@ -51,11 +34,13 @@ function Visit() {
       db.findings.where("visitId").equals(id).toArray(),
       db.photos.where("visitId").equals(id).toArray(),
     ]);
+    const liveSeasons = alive(seasons);
     return {
       visit,
       farm,
       plot,
-      season: alive(seasons).sort((a, b) => b.createdAt - a.createdAt)[0],
+      // Visitas de backups antigos não têm safra: usa a vigente.
+      season: liveSeasons.find((s) => s.id === visit.seasonId) ?? latestSeason(liveSeasons),
       findings: alive(findings).sort((a, b) => a.createdAt - b.createdAt),
       photos: alive(photos).sort((a, b) => a.takenAt - b.takenAt),
     };
@@ -73,11 +58,14 @@ function Visit() {
   }
 
   const { visit, farm, plot, season, findings, photos } = data;
+  const dap = season?.plantingDate
+    ? daysSince(season.plantingDate, new Date(`${visit.date}T12:00:00`).getTime())
+    : null;
 
   function summary(): string {
     const lines = [
       `*Relatório de visita — ${farm?.name ?? "Fazenda"} · ${plot?.name ?? "Talhão"}*`,
-      `Data: ${formatDate(visit.date)} · Estágio: ${visit.stage}`,
+      `Data: ${formatDate(visit.date)} · Estágio: ${visit.stage}${dap !== null ? ` · ${dap} dias após o plantio` : ""}`,
     ];
     if (season?.cultivar) lines.push(`Cultivar: ${season.cultivar} (safra ${season.label})`);
     if (findings.length) {
@@ -131,16 +119,23 @@ function Visit() {
         </h1>
         <p className="text-sm text-muted">
           {formatDate(visit.date)} · Estágio {visit.stage}
+          {dap !== null ? ` · ${dap} DAP` : ""}
           {season?.cultivar ? ` · ${season.cultivar}` : ""}
           {season ? ` · safra ${season.label}` : ""}
         </p>
+        {farm?.owner || farm?.municipality ? (
+          <p className="text-sm text-muted">{[farm.owner, farm.municipality].filter(Boolean).join(" · ")}</p>
+        ) : null}
       </header>
 
-      <div className="no-print grid grid-cols-2 gap-3">
+      <div className="no-print grid grid-cols-3 gap-2">
         <Button onClick={share}>Compartilhar</Button>
         <Button variant="secondary" onClick={() => window.print()}>
-          Imprimir / PDF
+          PDF
         </Button>
+        <LinkButton href={`/visitas/editar?id=${visit.id}`} variant="secondary">
+          Editar
+        </LinkButton>
       </div>
       {feedback ? (
         <p role="status" className="no-print text-sm text-brand">
@@ -178,7 +173,7 @@ function Visit() {
           <div className="grid grid-cols-2 gap-3">
             {photos.map((p) => (
               <figure key={p.id} className="space-y-1.5">
-                <PhotoImg blob={p.blob} alt={p.label || "Foto da visita"} />
+                <BlobImg blob={p.blob} alt={p.label || "Foto da visita"} className="aspect-square w-full rounded-xl" />
                 <figcaption className="text-xs text-muted">{p.label || "Diagnóstico não definido"}</figcaption>
               </figure>
             ))}

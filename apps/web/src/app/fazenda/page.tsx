@@ -1,20 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState, type FormEvent } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { VisitRow } from "@/components/visit-row";
 import { Button, Card, Chip, Empty, Field, LinkButton, PageTitle, SectionTitle, inputClass } from "@/components/ui";
-import { alive, db, newBase, removeRainfall } from "@/lib/db";
+import { alive, db, newBase, removeFarm, removeRainfall, updateFarm } from "@/lib/db";
 import { formatDate, todayISO } from "@/lib/format";
-
-/** Safra de soja: o ano agrícola começa em julho. Ex.: out/2026 vira "2026/27". */
-function currentSeasonLabel(): string {
-  const d = new Date();
-  const start = d.getMonth() >= 6 ? d.getFullYear() : d.getFullYear() - 1;
-  return `${start}/${String(start + 1).slice(2)}`;
-}
+import { daysSince, latestSeason, seasonLabelFor } from "@/lib/season";
 
 export default function FarmPage() {
   return (
@@ -26,7 +20,9 @@ export default function FarmPage() {
 
 function Farm() {
   const id = useSearchParams().get("id") ?? "";
+  const router = useRouter();
   const [plotOpen, setPlotOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
 
   const data = useLiveQuery(async () => {
     const farm = await db.farms.get(id);
@@ -59,7 +55,7 @@ function Farm() {
       await db.seasons.add({
         ...newBase(),
         plotId: plot.id,
-        label: String(f.get("season") ?? "").trim() || currentSeasonLabel(),
+        label: String(f.get("season") ?? "").trim() || seasonLabelFor(),
         cultivar: String(f.get("cultivar") ?? "").trim(),
         plantingDate: String(f.get("planting") ?? "") || null,
       });
@@ -76,6 +72,28 @@ function Farm() {
     if (!Number.isFinite(mm) || mm < 0) return;
     await db.rainfall.add({ ...newBase(), farmId: id, date: String(f.get("date")), mm });
     form.reset();
+  }
+
+  async function saveFarm(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const f = new FormData(e.currentTarget);
+    const name = String(f.get("name") ?? "").trim();
+    if (!name) return;
+    await updateFarm(id, {
+      name,
+      municipality: String(f.get("municipality") ?? "").trim(),
+      owner: String(f.get("owner") ?? "").trim(),
+    });
+    setEditOpen(false);
+  }
+
+  async function remove() {
+    if (!data?.farm) return;
+    const n = data.visits.length;
+    const extra = n ? `, os talhões e ${n === 1 ? "1 visita" : `${n} visitas`}` : " e os talhões";
+    if (!window.confirm(`Remover ${data.farm.name}${extra}? Faça um backup antes, se tiver dúvida.`)) return;
+    await removeFarm(id);
+    router.push("/fazendas");
   }
 
   if (!data) return null;
@@ -106,7 +124,34 @@ function Farm() {
       <PageTitle
         title={farm.name}
         subtitle={[farm.municipality, farm.owner].filter(Boolean).join(" · ") || undefined}
+        action={
+          <Button variant="ghost" onClick={() => setEditOpen((o) => !o)}>
+            {editOpen ? "Cancelar" : "Editar"}
+          </Button>
+        }
       />
+
+      {editOpen ? (
+        <Card className="space-y-4">
+          <form onSubmit={saveFarm} className="space-y-4">
+            <Field label="Nome da fazenda">
+              <input name="name" required defaultValue={farm.name} className={inputClass} />
+            </Field>
+            <Field label="Município">
+              <input name="municipality" defaultValue={farm.municipality} className={inputClass} />
+            </Field>
+            <Field label="Produtor / responsável">
+              <input name="owner" defaultValue={farm.owner} className={inputClass} />
+            </Field>
+            <Button type="submit" className="w-full">
+              Salvar fazenda
+            </Button>
+          </form>
+          <Button variant="danger" className="w-full" onClick={remove}>
+            Remover fazenda
+          </Button>
+        </Card>
+      ) : null}
 
       <section className="space-y-3">
         <div className="flex items-center justify-between">
@@ -127,7 +172,7 @@ function Farm() {
                   <input name="area" inputMode="decimal" className={inputClass} placeholder="120" />
                 </Field>
                 <Field label="Safra">
-                  <input name="season" className={inputClass} defaultValue={currentSeasonLabel()} />
+                  <input name="season" className={inputClass} defaultValue={seasonLabelFor()} />
                 </Field>
               </div>
               <Field label="Cultivar">
@@ -148,25 +193,33 @@ function Farm() {
         ) : (
           <ul className="space-y-3">
             {plots.map((plot) => {
-              const season = seasons
-                .filter((s) => s.plotId === plot.id)
-                .sort((a, b) => b.createdAt - a.createdAt)[0];
+              const season = latestSeason(seasons.filter((s) => s.plotId === plot.id));
+              const last = visits.find((v) => v.plotId === plot.id);
               return (
                 <li key={plot.id}>
                   <Card>
-                    <div className="flex items-start justify-between gap-3">
+                    <Link href={`/talhao?id=${plot.id}`} className="flex items-start justify-between gap-3">
                       <div>
-                        <p className="font-medium">{plot.name}</p>
+                        <p className="font-medium">
+                          {plot.name} <span className="text-brand">›</span>
+                        </p>
                         <p className="mt-0.5 text-sm text-muted">
                           {plot.areaHa ? `${plot.areaHa} ha` : "Área não informada"}
                           {season?.cultivar ? ` · ${season.cultivar}` : ""}
                         </p>
                         {season?.plantingDate ? (
-                          <p className="text-sm text-muted">Plantio: {formatDate(season.plantingDate)}</p>
+                          <p className="text-sm text-muted">
+                            Plantio: {formatDate(season.plantingDate)} · {daysSince(season.plantingDate)} dias
+                          </p>
+                        ) : null}
+                        {last ? (
+                          <p className="text-sm text-muted">
+                            Última visita: {formatDate(last.date)} · {last.stage}
+                          </p>
                         ) : null}
                       </div>
                       {season ? <Chip tone="muted">Safra {season.label}</Chip> : null}
-                    </div>
+                    </Link>
                     <div className="mt-3">
                       <LinkButton
                         href={`/visitas/nova?fazenda=${farm.id}&talhao=${plot.id}`}
