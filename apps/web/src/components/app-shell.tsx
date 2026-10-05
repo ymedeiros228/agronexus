@@ -21,6 +21,7 @@ import {
   X,
   type LucideIcon,
 } from "lucide-react";
+import { DemoBanner } from "./demo-bits";
 import { OnlineBadge } from "./online-badge";
 
 type NavItem = { href: string; label: string; short: string; icon: LucideIcon; match: (p: string) => boolean };
@@ -215,6 +216,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           wide ? "max-w-xl md:max-w-6xl" : "max-w-xl md:max-w-2xl"
         }`}
       >
+        <DemoBanner />
         {children}
       </main>
 

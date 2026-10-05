@@ -19,6 +19,7 @@ import {
   WifiOff,
   type LucideIcon,
 } from "lucide-react";
+import { LoadDemoButton } from "@/components/demo-bits";
 import { MiniMap, hasShape } from "@/components/map-bits";
 import { OperationRow } from "@/components/operation-row";
 import { VisitRow } from "@/components/visit-row";
@@ -28,6 +29,7 @@ import { alive, db, getMeta, type OperationKind } from "@/lib/db";
 import { formatDate, todayISO, plotLabel } from "@/lib/format";
 import { KIND_NAME, formatBRL, formatBRLShort, formatNumberBR, seasonLabels, seasonStats, yieldByPlot } from "@/lib/operations";
 import { NO_VISIT_ALERT_DAYS, buildPanel, type FarmStatus, type PlotStatus } from "@/lib/panel";
+import { DEMO_PREFIX } from "@/lib/demo";
 import { seasonFinance } from "@/lib/finance";
 import { daysSince } from "@/lib/season";
 import { stockAlerts, stockOf, usesByOperation } from "@/lib/stock";
@@ -98,7 +100,7 @@ export default function Home() {
     const liveExpenses = alive(expenses).filter(ofLiveFarm);
     const since = lastBackupAt ?? 0;
     const changed = [...live, ...liveOps, ...liveSupplies, ...liveMoves, ...liveSales, ...liveExpenses].filter(
-      (r) => r.updatedAt > since,
+      (r) => r.updatedAt > since && !r.id.startsWith(DEMO_PREFIX),
     ).length;
     const panel = buildPanel(
       {
@@ -456,12 +458,15 @@ function Welcome() {
         <p className="relative mt-3 max-w-md text-white/80">
           O caderno da lavoura de soja: monitoramento, operações, estoque e resultado da safra, num só lugar.
         </p>
-        <Link
-          href="/fazendas"
-          className="relative mt-6 inline-flex min-h-12 items-center gap-2 rounded-xl bg-white px-5 font-semibold text-[#14532f] shadow-sm transition active:scale-[0.98]"
-        >
-          Cadastrar a primeira fazenda <ArrowRight className="size-4" />
-        </Link>
+        <div className="relative mt-6 flex flex-wrap gap-3">
+          <Link
+            href="/fazendas"
+            className="inline-flex min-h-12 items-center gap-2 rounded-xl bg-white px-5 font-semibold text-[#14532f] shadow-sm transition active:scale-[0.98]"
+          >
+            Cadastrar a primeira fazenda <ArrowRight className="size-4" />
+          </Link>
+          <LoadDemoButton className="text-white" />
+        </div>
       </section>
 
       <section className="space-y-3">

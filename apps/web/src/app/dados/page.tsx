@@ -6,6 +6,7 @@ import { Button, Card, PageTitle, SectionTitle } from "@/components/ui";
 import { LAST_BACKUP_KEY, countLocalRecords, exportBackup, importBackup, markBackupDone } from "@/lib/backup";
 import { exportFinanceCsv, exportOperationsCsv, exportStockCsv, exportVisitsCsv } from "@/lib/csv";
 import { getMeta } from "@/lib/db";
+import { demoLoaded, loadDemo, removeDemo } from "@/lib/demo";
 import { todayISO } from "@/lib/format";
 
 type StorageInfo = { persisted: boolean; usedMB: number | null };
@@ -22,6 +23,7 @@ function saveFile(blob: Blob, name: string) {
 export default function DataPage() {
   const counts = useLiveQuery(() => countLocalRecords());
   const lastBackupAt = useLiveQuery(async () => (await getMeta<number>(LAST_BACKUP_KEY)) ?? null);
+  const demo = useLiveQuery(demoLoaded);
   const [storage, setStorage] = useState<StorageInfo | null>(null);
   const [message, setMessage] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -48,6 +50,17 @@ export default function DataPage() {
         ? { tone: "ok", text: "Pronto: o navegador não vai apagar seus dados sozinho." }
         : { tone: "error", text: "O navegador não permitiu. Instale o app na tela inicial e tente de novo." },
     );
+  }
+
+  async function run(task: () => Promise<string>) {
+    setBusy(true);
+    try {
+      setMessage({ tone: "ok", text: await task() });
+    } catch {
+      setMessage({ tone: "error", text: "Não foi possível concluir." });
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function download() {
@@ -196,6 +209,46 @@ export default function DataPage() {
               Proteger meus dados
             </Button>
           ) : null}
+        </Card>
+      </section>
+
+      <section className="space-y-3">
+        <SectionTitle>Demonstração</SectionTitle>
+        <Card className="space-y-3">
+          <p className="text-sm text-muted">
+            Duas fazendas de exemplo com talhões, visitas, operações, estoque e vendas, para mostrar o app funcionando.
+            Apagar o exemplo não mexe no que é seu.
+          </p>
+          {demo ? (
+            <Button
+              variant="danger"
+              disabled={busy}
+              className="w-full"
+              onClick={() =>
+                confirm("Apagar a fazenda de exemplo?") &&
+                run(async () => {
+                  await removeDemo();
+                  return "Exemplo apagado.";
+                })
+              }
+            >
+              Apagar fazenda de exemplo
+            </Button>
+          ) : (
+            <Button
+              variant="secondary"
+              disabled={busy}
+              className="w-full"
+              onClick={() =>
+                run(async () => {
+                  await loadDemo();
+                  return "Fazenda de exemplo carregada. Veja no Painel.";
+                })
+              }
+            >
+              Carregar fazenda de exemplo
+            </Button>
+          )}
         </Card>
       </section>
 
