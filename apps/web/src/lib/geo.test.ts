@@ -12,6 +12,7 @@ import {
   polygonAreaHa,
   projectShapes,
   selfIntersects,
+  tilesInView,
   toKml,
   toWorld,
   type LngLat,
@@ -161,5 +162,22 @@ describe("mapa em ladrilhos", () => {
     expect(selfIntersects(square)).toBe(false);
     expect(selfIntersects([square[0], square[1], square[3], square[2]])).toBe(true);
     expect(selfIntersects([...square, square[0]])).toBe(false);
+  });
+});
+
+describe("tilesInView", () => {
+  it("cobre o quadro inteiro sem buracos", () => {
+    const tiles = tilesInView([LNG, LAT], 15.4, 390, 520);
+    expect(new Set(tiles.map((t) => t.z))).toEqual(new Set([15]));
+    expect(Math.min(...tiles.map((t) => t.left))).toBeLessThanOrEqual(0);
+    expect(Math.min(...tiles.map((t) => t.top))).toBeLessThanOrEqual(0);
+    expect(Math.max(...tiles.map((t) => t.left + t.size))).toBeGreaterThanOrEqual(390);
+    expect(Math.max(...tiles.map((t) => t.top + t.size))).toBeGreaterThanOrEqual(520);
+    expect(tiles[0].size).toBeCloseTo(256 * 2 ** 0.4, 6);
+  });
+
+  it("dá a volta no meridiano 180 e corta fora dos polos", () => {
+    const tiles = tilesInView([180, 0], 1, 512, 2000);
+    expect(tiles.every((t) => t.x >= 0 && t.x < 2 && t.y >= 0 && t.y < 2)).toBe(true);
   });
 });

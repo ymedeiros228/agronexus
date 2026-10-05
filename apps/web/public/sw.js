@@ -2,9 +2,14 @@
  * - /_next/static (arquivos com hash no nome): cache primeiro.
  * - Páginas e demais GET do mesmo site: rede primeiro, cache como reserva.
  * - Na instalação, baixa as páginas principais e seus arquivos para uso offline.
+ * - Imagens de satélite do mapa: cache primeiro, num cache próprio que passa de uma versão para outra.
  * Os dados do usuário ficam no IndexedDB, não aqui.
  */
-const CACHE = "agronexus-v15";
+const CACHE = "agronexus-v16";
+const TILES = "agronexus-tiles";
+/** Uns 15 KB por imagem: cerca de 60 MB no máximo. */
+const MAX_TILES = 4000;
+const isTile = (url) => url.hostname === "server.arcgisonline.com" && url.pathname.includes("/tile/");
 const PAGES = [
   "/",
   "/fazendas",
@@ -66,7 +71,7 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(
     (async () => {
       const names = await caches.keys();
-      await Promise.all(names.filter((n) => n !== CACHE).map((n) => caches.delete(n)));
+      await Promise.all(names.filter((n) => n !== CACHE && n !== TILES).map((n) => caches.delete(n)));
       await self.clients.claim();
     })(),
   );
@@ -76,6 +81,10 @@ self.addEventListener("fetch", (event) => {
   const req = event.request;
   if (req.method !== "GET") return;
   const url = new URL(req.url);
+  if (isTile(url)) {
+    event.respondWith(tile(req));
+    return;
+  }
   if (url.origin !== self.location.origin) return;
 
   if (url.pathname.startsWith("/_next/static/")) {
@@ -114,3 +123,24 @@ self.addEventListener("fetch", (event) => {
       }),
   );
 });
+
+let putsSinceTrim = 0;
+
+/** Imagem de satélite: guardada na primeira vez que aparece (ou em "Guardar esta área"). */
+async function tile(req) {
+  const cache = await caches.open(TILES);
+  const hit = await cache.match(req.url, { ignoreVary: true });
+  if (hit) return hit;
+  const res = await fetch(req);
+  // Só resposta CORS legível: a opaca ocupa megabytes da cota do navegador.
+  if (res.ok && res.type === "cors") {
+    await cache.put(req.url, res.clone());
+    if (++putsSinceTrim >= 100) {
+      putsSinceTrim = 0;
+      const keys = await cache.keys();
+      // As chaves vêm na ordem em que entraram: apaga as mais antigas.
+      await Promise.all(keys.slice(0, Math.max(0, keys.length - MAX_TILES)).map((k) => cache.delete(k)));
+    }
+  }
+  return res;
+}

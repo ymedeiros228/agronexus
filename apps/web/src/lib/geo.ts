@@ -263,3 +263,35 @@ export function selfIntersects(ring: LngLat[]): boolean {
   }
   return false;
 }
+
+/** `key`: fixo enquanto o mapa é arrastado (não repete quando o mundo dá a volta). */
+export type TileRef = { key: string; z: number; x: number; y: number; left: number; top: number; size: number };
+
+/**
+ * Ladrilhos que cobrem um quadro de `width` × `height` com o centro e zoom dados.
+ * Usa o zoom inteiro mais próximo e devolve a posição na tela já esticada para o zoom fracionado.
+ */
+export function tilesInView(centerP: LngLat, zoom: number, width: number, height: number): TileRef[] {
+  const z = Math.round(zoom);
+  const scale = 2 ** (zoom - z);
+  const [cx, cy] = toWorld(centerP, z);
+  const left = cx - width / 2 / scale;
+  const top = cy - height / 2 / scale;
+  const n = 2 ** z;
+  const out: TileRef[] = [];
+  for (let ty = Math.floor(top / TILE); ty <= Math.floor((top + height / scale) / TILE); ty++) {
+    if (ty < 0 || ty >= n) continue;
+    for (let tx = Math.floor(left / TILE); tx <= Math.floor((left + width / scale) / TILE); tx++) {
+      out.push({
+        key: `${z}/${tx}/${ty}`,
+        z,
+        x: ((tx % n) + n) % n,
+        y: ty,
+        left: (tx * TILE - left) * scale,
+        top: (ty * TILE - top) * scale,
+        size: TILE * scale,
+      });
+    }
+  }
+  return out;
+}

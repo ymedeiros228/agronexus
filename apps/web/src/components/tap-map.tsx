@@ -1,16 +1,17 @@
 "use client";
 
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
-import { Crosshair, Minus, Plus } from "lucide-react";
+import { useEffect, useRef, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { CloudDownload, Crosshair, Minus, Plus } from "lucide-react";
+import { toast } from "@/components/toaster";
 import { Button, Card, SectionTitle } from "@/components/ui";
 import {
-  TILE,
   fitView,
   fromWorld,
   openRing,
   perimeterM,
   polygonAreaHa,
   selfIntersects,
+  tilesInView,
   toWorld,
   type LngLat,
 } from "@/lib/geo";
@@ -21,6 +22,10 @@ const MAX_ZOOM = 19;
 /** Imagem de satélite gratuita da Esri (exige o crédito no canto do mapa). */
 const tileUrl = (z: number, x: number, y: number) =>
   `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${y}/${x}`;
+/** Zooms a mais e a menos que "Guardar área" baixa em volta da vista atual. */
+const SAVE_DEEPER = 2;
+const SAVE_WIDER = 2;
+const noop = () => () => {};
 /** Arrastou menos que isso: foi um toque, marca ponto. */
 const TAP_PX = 8;
 
@@ -56,6 +61,9 @@ export function TapDrawer({
   const [me, setMe] = useState<LngLat | null>(null);
   const [tiles, setTiles] = useState<"loading" | "ok" | "fail">("loading");
   const [gpsError, setGpsError] = useState("");
+  const [saving, setSaving] = useState<{ done: number; total: number } | null>(null);
+  // Guardar para usar sem internet depende do service worker (que guarda os ladrilhos baixados).
+  const canSave = useSyncExternalStore(noop, () => !!navigator.serviceWorker?.controller, () => false);
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const gesture = useRef<Gesture | null>(null);
   const viewRef = useRef(view);
@@ -213,6 +221,38 @@ export function TapDrawer({
     gesture.current = pointers.current.size ? { kind: "pinch", anchor: [0, 0], startZoom: 0, startDist: 0 } : null;
   }
 
+  /** Baixa os ladrilhos da vista atual (e zooms vizinhos); o service worker guarda para o campo. */
+  async function saveOffline() {
+    const v = viewRef.current;
+    if (!v || !size || saving) return;
+    const base = Math.round(v.zoom);
+    const urls = new Set<string>();
+    for (let z = Math.max(MIN_ZOOM, base - SAVE_WIDER); z <= Math.min(MAX_ZOOM - 1, base + SAVE_DEEPER); z++) {
+      for (const t of tilesInView(v.center, z, size.w, size.h)) urls.add(tileUrl(t.z, t.x, t.y));
+    }
+    const queue = [...urls];
+    let done = 0;
+    let failed = 0;
+    setSaving({ done, total: queue.length });
+    const worker = async () => {
+      for (let url = queue.pop(); url; url = queue.pop()) {
+        try {
+          if (!(await fetch(url, { mode: "cors" })).ok) failed++;
+        } catch {
+          failed++;
+        }
+        setSaving({ done: ++done, total: urls.size });
+      }
+    };
+    await Promise.all(Array.from({ length: 6 }, worker));
+    setSaving(null);
+    toast(
+      failed === urls.size
+        ? "Sem internet agora. Guarde a área quando tiver sinal."
+        : `Área guardada (${urls.size - failed} imagens). O mapa dessa região abre sem internet.`,
+    );
+  }
+
   const area = polygonAreaHa(points);
   const crossed = selfIntersects(points);
 
@@ -278,6 +318,19 @@ export function TapDrawer({
           </p>
         </div>
         {gpsError ? <p className="text-sm text-warn">{gpsError}</p> : null}
+        {canSave ? (
+          <button
+            type="button"
+            onClick={saveOffline}
+            disabled={!!saving}
+            className="flex w-full items-center justify-center gap-2 text-sm font-medium text-brand disabled:text-muted"
+          >
+            <CloudDownload className="size-4" />
+            {saving
+              ? `Guardando… ${Math.round((saving.done / saving.total) * 100)}%`
+              : "Guardar esta área para usar sem internet"}
+          </button>
+        ) : null}
         <div className="grid grid-cols-3 gap-2 text-center">
           <div className="rounded-xl bg-background p-2">
             <p className="text-xl font-semibold tabular-nums">{points.length}</p>
@@ -395,37 +448,22 @@ function Tiles({
   size: { w: number; h: number };
   onStatus: (s: "ok" | "fail") => void;
 }) {
-  const z = Math.round(view.zoom);
-  const scale = 2 ** (view.zoom - z);
-  const [cx, cy] = toWorld(view.center, z);
-  const span = TILE * scale;
-  const left = cx - size.w / 2 / scale;
-  const top = cy - size.h / 2 / scale;
-  const n = 2 ** z;
-  const out = [];
-  for (let ty = Math.floor(top / TILE); ty <= Math.floor((top + size.h / scale) / TILE); ty++) {
-    if (ty < 0 || ty >= n) continue;
-    for (let tx = Math.floor(left / TILE); tx <= Math.floor((left + size.w / scale) / TILE); tx++) {
-      const wx = ((tx % n) + n) % n;
-      out.push(
+  return (
+    <>
+      {tilesInView(view.center, view.zoom, size.w, size.h).map((t) => (
         // eslint-disable-next-line @next/next/no-img-element
         <img
-          key={`${z}/${tx}/${ty}`}
-          src={tileUrl(z, wx, ty)}
+          key={t.key}
+          src={tileUrl(t.z, t.x, t.y)}
           alt=""
+          crossOrigin="anonymous"
           draggable={false}
           onLoad={() => onStatus("ok")}
           onError={() => onStatus("fail")}
           className="pointer-events-none absolute max-w-none"
-          style={{
-            left: (tx * TILE - left) * scale,
-            top: (ty * TILE - top) * scale,
-            width: span + 0.5,
-            height: span + 0.5,
-          }}
-        />,
-      );
-    }
-  }
-  return <>{out}</>;
+          style={{ left: t.left, top: t.top, width: t.size + 0.5, height: t.size + 0.5 }}
+        />
+      ))}
+    </>
+  );
 }
