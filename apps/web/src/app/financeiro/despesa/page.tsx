@@ -5,7 +5,8 @@ import { Suspense, useState, type FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useLiveQuery } from "dexie-react-hooks";
 import { Button, Card, Empty, Field, LinkButton, PageTitle, inputClass } from "@/components/ui";
-import { alive, db, removeExpense, type Expense, type ExpenseCategory } from "@/lib/db";
+import { alive, db, removeExpense, type Expense, type ExpenseCategory, type Farm } from "@/lib/db";
+import { FarmField, byFarmName } from "@/components/farm-field";
 import { EXPENSE_CATEGORIES, saveExpense } from "@/lib/finance";
 import { todayISO } from "@/lib/format";
 import { formatNumberBR, parseNumberBR, seasonLabels } from "@/lib/operations";
@@ -15,8 +16,9 @@ function ExpenseEntry() {
   const id = params.get("id") ?? "";
   const data = useLiveQuery(async () => {
     const labels = seasonLabels(alive(await db.seasons.toArray()));
+    const farms = alive(await db.farms.toArray()).sort(byFarmName);
     const expense = id ? ((await db.expenses.get(id)) ?? null) : null;
-    return { labels, expense: expense && !expense.deletedAt ? expense : null };
+    return { labels, farms, expense: expense && !expense.deletedAt ? expense : null };
   }, [id]);
 
   if (!data) return null;
@@ -31,19 +33,45 @@ function ExpenseEntry() {
   }
   const label = data.expense?.seasonLabel ?? params.get("safra") ?? data.labels[0] ?? "";
   const labels = data.labels.includes(label) || !label ? data.labels : [label, ...data.labels];
-  return <ExpenseForm key={data.expense?.id ?? "nova"} expense={data.expense} labels={labels} initialLabel={label} />;
+  return (
+    <ExpenseForm
+      key={data.expense?.id ?? "nova"}
+      expense={data.expense}
+      labels={labels}
+      initialLabel={label}
+      farms={data.farms}
+      initialFarm={data.expense ? (data.expense.farmId ?? "") : (params.get("fazenda") ?? "")}
+      returnFarm={params.get("fazenda") ?? ""}
+    />
+  );
 }
 
-function ExpenseForm({ expense, labels, initialLabel }: { expense: Expense | null; labels: string[]; initialLabel: string }) {
+function ExpenseForm({
+  expense,
+  labels,
+  initialLabel,
+  farms,
+  initialFarm,
+  returnFarm,
+}: {
+  expense: Expense | null;
+  labels: string[];
+  initialLabel: string;
+  farms: Farm[];
+  initialFarm: string;
+  /** Filtro de fazenda do financeiro de onde veio, para voltar nele. */
+  returnFarm: string;
+}) {
   const router = useRouter();
   const [seasonLabel, setSeasonLabel] = useState(initialLabel);
+  const [farmId, setFarmId] = useState(initialFarm);
   const [date, setDate] = useState(expense?.date ?? todayISO());
   const [category, setCategory] = useState<ExpenseCategory | "">(expense?.category ?? "");
   const [description, setDescription] = useState(expense?.description ?? "");
   const [amount, setAmount] = useState(formatNumberBR(expense?.amount, 2));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const back = `/financeiro?safra=${encodeURIComponent(seasonLabel)}`;
+  const back = `/financeiro?safra=${encodeURIComponent(seasonLabel)}${returnFarm ? `&fazenda=${returnFarm}` : ""}`;
 
   async function save(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -59,7 +87,7 @@ function ExpenseForm({ expense, labels, initialLabel }: { expense: Expense | nul
     setError("");
     setSaving(true);
     try {
-      await saveExpense({ seasonLabel, date, category, description, amount: value }, expense?.id);
+      await saveExpense({ seasonLabel, date, category, description, amount: value, farmId }, expense?.id);
       router.push(back);
     } catch (err) {
       setSaving(false);
@@ -100,6 +128,7 @@ function ExpenseForm({ expense, labels, initialLabel }: { expense: Expense | nul
             <input type="date" required value={date} onChange={(e) => setDate(e.target.value)} className={inputClass} />
           </Field>
         </div>
+        <FarmField farms={farms} value={farmId} onChange={setFarmId} what="a despesa" />
         <Field label="Tipo">
           <select
             required

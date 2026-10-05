@@ -196,26 +196,50 @@ export function stockRows(stock: SupplyStock[]): string[][] {
     ]);
 }
 
-const FINANCE_HEADER = ["Tipo", "Safra", "Data", "Categoria / comprador", "Descrição", "Sacas", "Preço por saca (R$)", "Valor (R$)"];
+const FINANCE_HEADER = [
+  "Tipo",
+  "Safra",
+  "Data",
+  "Fazenda",
+  "Categoria / comprador",
+  "Descrição",
+  "Sacas",
+  "Preço por saca (R$)",
+  "Valor (R$)",
+];
 
-/** Vendas e despesas gerais, por data. */
-export function financeRows(sales: Sale[], expenses: Expense[]): string[][] {
+/** Vendas e despesas gerais, por data. Sem fazenda = "Toda a conta". */
+export function financeRows(sales: Sale[], expenses: Expense[], farms: Farm[] = []): string[][] {
+  const farmName = new Map(farms.map((f) => [f.id, f.name]));
+  const farm = (id?: string | null) => (id ? (farmName.get(id) ?? "") : "Toda a conta");
   const rows = [
     ...sales.map((s) => ({
       date: s.date,
-      row: ["Venda", s.seasonLabel, formatDate(s.date), s.buyer, s.note, num(s.bags, 1), num(s.pricePerBag), num(s.bags * s.pricePerBag)],
+      row: [
+        "Venda",
+        s.seasonLabel,
+        formatDate(s.date),
+        farm(s.farmId),
+        s.buyer,
+        s.note,
+        num(s.bags, 1),
+        num(s.pricePerBag),
+        num(s.bags * s.pricePerBag),
+      ],
     })),
     ...expenses.map((e) => ({
       date: e.date,
-      row: ["Despesa", e.seasonLabel, formatDate(e.date), EXPENSE_NAME[e.category], e.description, "", "", num(e.amount)],
+      row: ["Despesa", e.seasonLabel, formatDate(e.date), farm(e.farmId), EXPENSE_NAME[e.category], e.description, "", "", num(e.amount)],
     })),
   ];
   return rows.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0)).map((r) => r.row);
 }
 
 export async function exportFinanceCsv(): Promise<Blob> {
-  const [sales, expenses] = await Promise.all([db.sales.toArray(), db.expenses.toArray()]);
-  return csvBlob([FINANCE_HEADER, ...financeRows(alive(sales), alive(expenses))]);
+  const [sales, expenses, farms] = await Promise.all([db.sales.toArray(), db.expenses.toArray(), db.farms.toArray()]);
+  const live = alive(farms);
+  const ofLiveFarm = (r: { farmId?: string | null }) => !r.farmId || live.some((f) => f.id === r.farmId);
+  return csvBlob([FINANCE_HEADER, ...financeRows(alive(sales).filter(ofLiveFarm), alive(expenses).filter(ofLiveFarm), live)]);
 }
 
 export async function exportStockCsv(): Promise<Blob> {

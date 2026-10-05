@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { exportBackup, importBackup } from "./backup";
-import { db, type Expense, type Sale } from "./db";
+import { db, removeFarm, type Expense, type Sale } from "./db";
 import { saveExpense, saveSale, seasonFinance } from "./finance";
 import type { SeasonStats } from "./operations";
 
@@ -100,5 +100,21 @@ describe("vendas e despesas no banco", () => {
     const file = new File([await (await exportBackup()).text()], "b.json");
     await Promise.all(db.tables.map((t) => t.clear()));
     expect(await importBackup(file)).toBe(2);
+  });
+
+  it("guarda a fazenda e some junto quando a fazenda é excluída", async () => {
+    await db.farms.bulkAdd([
+      { ...base("f1"), name: "A", municipality: "", owner: "" },
+      { ...base("f2"), name: "B", municipality: "", owner: "" },
+    ]);
+    const mine = await saveSale({ seasonLabel: "2026/27", date: "2027-04-01", bags: 10, pricePerBag: 100, buyer: "", note: "", farmId: "f1" });
+    const other = await saveExpense({ seasonLabel: "2026/27", date: "2027-01-01", category: "frete", description: "", amount: 10, farmId: "f2" });
+    const account = await saveExpense({ seasonLabel: "2026/27", date: "2027-01-01", category: "juros", description: "", amount: 10, farmId: "" });
+    expect((await db.expenses.get(account))?.farmId).toBeNull();
+
+    await removeFarm("f1");
+    expect((await db.sales.get(mine))?.deletedAt).toBeTruthy();
+    expect((await db.expenses.get(other))?.deletedAt).toBeFalsy();
+    expect((await db.expenses.get(account))?.deletedAt).toBeFalsy();
   });
 });

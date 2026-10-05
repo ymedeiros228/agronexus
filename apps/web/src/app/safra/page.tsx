@@ -2,14 +2,14 @@
 
 import Link from "next/link";
 import { Suspense, useState, type ReactNode } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useLiveQuery } from "dexie-react-hooks";
 import { Button, Card, Empty, LinkButton, SectionTitle } from "@/components/ui";
 import { KIND_LABEL } from "@/lib/catalog";
 import { EXPENSE_NAME } from "@/lib/finance";
 import { formatDate, todayISO } from "@/lib/format";
 import { KIND_NAME, formatBRL, formatNumberBR, seasonLabels } from "@/lib/operations";
-import { seasonReport, type SeasonReport } from "@/lib/report";
+import { accountWide, farmsOfSeason, forFarm, seasonReport, type SeasonReport } from "@/lib/report";
 import { loadReportInput } from "@/lib/report-data";
 import { CATEGORY_NAME, formatQty } from "@/lib/stock";
 
@@ -47,7 +47,10 @@ function summaryText(r: SeasonReport, farms: string): string {
 }
 
 function Report() {
-  const label = useSearchParams().get("rotulo") ?? "";
+  const router = useRouter();
+  const params = useSearchParams();
+  const label = params.get("rotulo") ?? "";
+  const askedFarm = params.get("fazenda") ?? "";
   const [feedback, setFeedback] = useState("");
   const data = useLiveQuery(async () => {
     const input = await loadReportInput();
@@ -66,9 +69,15 @@ function Report() {
     );
   }
 
-  const r = seasonReport(label, data.input, data.today);
+  const farmOptions = farmsOfSeason(data.input, label);
+  // Com uma fazenda só, o relatório é o da conta toda (inclui os lançamentos sem fazenda).
+  const farmId = farmOptions.length > 1 && farmOptions.some((f) => f.id === askedFarm) ? askedFarm : "";
+  const r = seasonReport(label, farmId ? forFarm(data.input, farmId) : data.input, data.today);
+  const outside = farmId ? accountWide(data.input, label) : null;
   const farmNames = [...new Set(r.plots.map((p) => p.farmName))].join(", ");
   const maxKind = Math.max(...r.costByKind.map((k) => k.cost), 1);
+  const linkTo = (l: string, f = farmId) =>
+    `/safra?rotulo=${encodeURIComponent(l)}${f ? `&fazenda=${encodeURIComponent(f)}` : ""}`;
 
   async function share() {
     const text = summaryText(r, farmNames);
@@ -99,6 +108,24 @@ function Report() {
           {farmNames || "Sem fazenda"} · gerado em {formatDate(data.today)}
         </p>
       </header>
+
+      {farmOptions.length > 1 ? (
+        <label className="no-print block sm:max-w-sm">
+          <span className="sr-only">Fazenda</span>
+          <select
+            value={farmId}
+            onChange={(e) => router.replace(linkTo(label, e.target.value))}
+            className="min-h-11 w-full rounded-xl border border-border bg-surface px-3 text-sm font-medium"
+          >
+            <option value="">Todas as fazendas ({farmOptions.length})</option>
+            {farmOptions.map((f) => (
+              <option key={f.id} value={f.id}>
+                Só {f.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : null}
 
       <div className="no-print grid grid-cols-2 gap-2 sm:max-w-sm">
         <Button onClick={share}>Compartilhar</Button>
@@ -332,7 +359,7 @@ function Report() {
                       {h.label === r.label ? (
                         h.label
                       ) : (
-                        <Link href={`/safra?rotulo=${encodeURIComponent(h.label)}`} className="text-brand">
+                        <Link href={linkTo(h.label)} className="text-brand">
                           {h.label}
                         </Link>
                       )}
@@ -347,6 +374,16 @@ function Report() {
             </table>
           </Card>
         </Section>
+      ) : null}
+
+      {outside && (outside.sales > 0 || outside.expenses > 0) ? (
+        <Card className="text-sm">
+          Fora deste relatório, lançados para a conta toda nesta safra:
+          {outside.expenses > 0 ? ` ${formatBRL(outside.expensesCost)} em despesas gerais` : ""}
+          {outside.expenses > 0 && outside.sales > 0 ? " e" : ""}
+          {outside.sales > 0 ? ` ${formatBRL(outside.revenue)} em vendas` : ""}. Para entrarem aqui, edite o lançamento e
+          escolha a fazenda.
+        </Card>
       ) : null}
 
       <p className="text-xs text-muted">

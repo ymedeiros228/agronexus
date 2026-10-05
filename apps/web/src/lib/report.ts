@@ -104,6 +104,46 @@ export type SeasonReport = {
 
 const byName = (a: string, b: string) => a.localeCompare(b, "pt-BR", { numeric: true });
 
+/**
+ * Recorta os dados para uma fazenda só. Vendas e despesas entram só se foram lançadas para ela;
+ * as da conta toda ficam de fora (não há rateio automático).
+ * Insumos e movimentos continuam todos: o preço médio é da conta, e os usos já seguem as operações.
+ */
+export function forFarm(input: ReportInput, farmId: string): ReportInput {
+  const plots = input.plots.filter((p) => p.farmId === farmId);
+  const plotIds = new Set(plots.map((p) => p.id));
+  return {
+    ...input,
+    farms: input.farms.filter((f) => f.id === farmId),
+    plots,
+    seasons: input.seasons.filter((s) => plotIds.has(s.plotId)),
+    operations: input.operations.filter((o) => plotIds.has(o.plotId)),
+    visits: input.visits.filter((v) => plotIds.has(v.plotId)),
+    rainfall: input.rainfall.filter((r) => r.farmId === farmId),
+    sales: input.sales.filter((s) => s.farmId === farmId),
+    expenses: input.expenses.filter((e) => e.farmId === farmId),
+  };
+}
+
+/** Fazendas com talhão na safra, por nome. O filtro por fazenda só faz sentido com mais de uma. */
+export function farmsOfSeason(input: ReportInput, label: string): Farm[] {
+  const plotFarm = new Map(input.plots.map((p) => [p.id, p.farmId]));
+  const ids = new Set(input.seasons.filter((s) => s.label === label).map((s) => plotFarm.get(s.plotId)));
+  return input.farms.filter((f) => ids.has(f.id)).sort((a, b) => byName(a.name, b.name));
+}
+
+/** Vendas e despesas da safra lançadas para a conta toda, sem fazenda. */
+export function accountWide(input: ReportInput, label: string) {
+  const sales = input.sales.filter((s) => s.seasonLabel === label && !s.farmId);
+  const expenses = input.expenses.filter((e) => e.seasonLabel === label && !e.farmId);
+  return {
+    sales: sales.length,
+    revenue: sales.reduce((sum, s) => sum + s.bags * s.pricePerBag, 0),
+    expenses: expenses.length,
+    expensesCost: expenses.reduce((sum, e) => sum + e.amount, 0),
+  };
+}
+
 export function seasonReport(label: string, input: ReportInput, today: string): SeasonReport {
   const farmById = new Map(input.farms.map((f) => [f.id, f]));
   const seasonsOfLabel = input.seasons.filter((s) => s.label === label);

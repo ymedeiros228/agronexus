@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { csvCell, operationRows, toCsv, visitRows } from "./csv";
+import { csvCell, financeRows, operationRows, toCsv, visitRows } from "./csv";
 import type { Farm, Finding, Operation, Plot, Season, Visit } from "./db";
 
 const base = (id: string, createdAt = 1) => ({ id, createdAt, updatedAt: createdAt });
@@ -111,5 +111,20 @@ describe("visitRows", () => {
       "",
     ]);
     expect(rows[1][11]).toBe("65"); // 7833 / 120,5
+  });
+});
+
+describe("financeRows", () => {
+  it("vendas e despesas por data, com a fazenda ou 'Toda a conta'", () => {
+    const base = (id: string) => ({ id, createdAt: 1, updatedAt: 1 });
+    const rows = financeRows(
+      [{ ...base("v"), seasonLabel: "2026/27", date: "2027-04-01", bags: 100, pricePerBag: 120.5, buyer: "Trading", note: "", farmId: "f1" }],
+      [{ ...base("x"), seasonLabel: "2026/27", date: "2026-08-01", category: "arrendamento", description: "", amount: 5_000 }],
+      [{ ...base("f1"), name: "Boa Esperança", municipality: "", owner: "" }],
+    );
+    expect(rows).toEqual([
+      ["Despesa", "2026/27", "01/08/2026", "Toda a conta", "Arrendamento", "", "", "", "5000"],
+      ["Venda", "2026/27", "01/04/2027", "Boa Esperança", "Trading", "", "100", "120,5", "12050"],
+    ]);
   });
 });

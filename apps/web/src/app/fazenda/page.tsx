@@ -8,6 +8,7 @@ import { VisitRow } from "@/components/visit-row";
 import { Button, Card, Chip, Empty, Field, LinkButton, PageTitle, SectionTitle, inputClass } from "@/components/ui";
 import { alive, db, newBase, removeFarm, removeRainfall, updateFarm } from "@/lib/db";
 import { formatDate, todayISO } from "@/lib/format";
+import { seasonLabels } from "@/lib/operations";
 import { daysSince, latestSeason, seasonLabelFor } from "@/lib/season";
 
 export default function FarmPage() {
@@ -113,6 +114,7 @@ function Farm() {
   cutoff.setDate(cutoff.getDate() - 30);
   const cutoffISO = cutoff.toISOString().slice(0, 10);
   const last30 = rain.filter((r) => r.date >= cutoffISO).reduce((sum, r) => sum + r.mm, 0);
+  const reportLabel = seasonLabels(seasons)[0];
 
   return (
     <>
@@ -151,6 +153,15 @@ function Farm() {
             Remover fazenda
           </Button>
         </Card>
+      ) : null}
+
+      {reportLabel ? (
+        <Link
+          href={`/safra?rotulo=${encodeURIComponent(reportLabel)}&fazenda=${farm.id}`}
+          className="block text-sm font-medium text-brand"
+        >
+          Relatório da safra {reportLabel} desta fazenda ›
+        </Link>
       ) : null}
 
       <section className="space-y-3">

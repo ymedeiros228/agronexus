@@ -61,8 +61,9 @@ export default function Home() {
     const liveSeasons = alive(seasons).filter((s) => plotIds.has(s.plotId));
     const liveSupplies = alive(supplies);
     const liveMoves = alive(moves);
-    const liveSales = alive(sales);
-    const liveExpenses = alive(expenses);
+    const ofLiveFarm = (r: { farmId?: string | null }) => !r.farmId || liveFarms.some((f) => f.id === r.farmId);
+    const liveSales = alive(sales).filter(ofLiveFarm);
+    const liveExpenses = alive(expenses).filter(ofLiveFarm);
     const since = lastBackupAt ?? 0;
     const changed = [...live, ...liveOps, ...liveSupplies, ...liveMoves, ...liveSales, ...liveExpenses].filter(
       (r) => r.updatedAt > since,

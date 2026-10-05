@@ -20,6 +20,7 @@ export async function loadReportInput(): Promise<ReportInput> {
   const farmIds = new Set(liveFarms.map((f) => f.id));
   const livePlots = alive(plots).filter((p) => farmIds.has(p.farmId));
   const plotIds = new Set(livePlots.map((p) => p.id));
+  const ofLiveFarm = (r: { farmId?: string | null }) => !r.farmId || farmIds.has(r.farmId);
   return {
     farms: liveFarms,
     plots: livePlots,
@@ -30,7 +31,7 @@ export async function loadReportInput(): Promise<ReportInput> {
     rainfall: alive(rainfall).filter((r) => farmIds.has(r.farmId)),
     supplies: alive(supplies),
     stockMoves: alive(stockMoves),
-    sales: alive(sales),
-    expenses: alive(expenses),
+    sales: alive(sales).filter(ofLiveFarm),
+    expenses: alive(expenses).filter(ofLiveFarm),
   };
 }

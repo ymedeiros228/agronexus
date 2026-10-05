@@ -139,6 +139,8 @@ export type Sale = Base & {
   pricePerBag: number; // R$ líquido por saca
   buyer: string;
   note: string;
+  /** Fazenda de onde saiu o grão. Null/ausente = da conta toda. */
+  farmId?: string | null;
 };
 
 export type ExpenseCategory =
@@ -159,6 +161,8 @@ export type Expense = Base & {
   category: ExpenseCategory;
   description: string;
   amount: number; // R$
+  /** Fazenda da despesa. Null/ausente = da conta toda (não entra no relatório de uma fazenda só). */
+  farmId?: string | null;
 };
 
 /** Configurações deste aparelho (não vão para o backup). */
@@ -292,7 +296,8 @@ export async function removePlot(id: string) {
 /** Remove a fazenda com talhões, visitas, operações e chuvas (exclusão lógica). */
 export async function removeFarm(id: string) {
   const mark = gone();
-  await db.transaction("rw", [db.farms, db.plots, db.visits, db.rainfall, db.operations, db.stockMoves], async () => {
+  const tables = [db.farms, db.plots, db.visits, db.rainfall, db.operations, db.stockMoves, db.sales, db.expenses];
+  await db.transaction("rw", tables, async () => {
     await db.farms.update(id, mark);
     await db.plots.where("farmId").equals(id).filter((r) => !r.deletedAt).modify(mark);
     await db.visits.where("farmId").equals(id).filter((r) => !r.deletedAt).modify(mark);
@@ -300,6 +305,9 @@ export async function removeFarm(id: string) {
     const ops = await db.operations.where("farmId").equals(id).filter((r) => !r.deletedAt).primaryKeys();
     await db.operations.where("id").anyOf(ops).modify(mark);
     await removeUses(ops, mark);
+    // Vendas e despesas não têm índice de fazenda; são poucas, filtra na memória.
+    await db.sales.filter((r) => r.farmId === id && !r.deletedAt).modify(mark);
+    await db.expenses.filter((r) => r.farmId === id && !r.deletedAt).modify(mark);
   });
 }
 

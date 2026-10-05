@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Finding, Operation, Plot, Season, StockMove, Supply, Visit } from "./db";
-import { seasonReport, type ReportInput } from "./report";
+import { accountWide, farmsOfSeason, forFarm, seasonReport, type ReportInput } from "./report";
 import { seasonPeriod } from "./season";
 
 const base = (id: string, createdAt = 1) => ({ id, createdAt, updatedAt: createdAt });
@@ -157,5 +157,54 @@ describe("seasonReport", () => {
   it("financeiro da safra junto do relatório", () => {
     expect(r.finance.totalCost).toBe(60_000);
     expect(r.finance.margin).toBe(1_092_000);
+  });
+});
+
+describe("relatório de uma fazenda só", () => {
+  const two: ReportInput = {
+    ...input,
+    farms: [...input.farms, { ...base("f2"), name: "Santa Fé", municipality: "", owner: "" }],
+    plots: [...plots, { ...base("p3"), farmId: "f2", name: "A1", areaHa: 40 }],
+    seasons: [...seasons, { ...base("s3", 2), plotId: "p3", label: "2026/27", cultivar: "C", plantingDate: "2026-11-20" }],
+    operations: [
+      ...input.operations,
+      op("b1", { farmId: "f2", plotId: "p3", seasonId: "s3", areaHa: 40, cost: 8_000 }),
+      op("bh", { farmId: "f2", plotId: "p3", seasonId: "s3", kind: "colheita", areaHa: 40, yieldBags: 2_400 }),
+    ],
+    rainfall: [...input.rainfall, { ...base("r9"), farmId: "f2", date: "2027-01-02", mm: 12 }],
+    sales: [
+      ...input.sales,
+      { ...base("vf2"), seasonLabel: "2026/27", date: "2027-04-02", bags: 2_000, pricePerBag: 110, buyer: "", note: "", farmId: "f2" },
+    ],
+    expenses: [
+      ...input.expenses,
+      { ...base("xf2"), seasonLabel: "2026/27", date: "2026-09-01", category: "frete", description: "", amount: 2_000, farmId: "f2" },
+    ],
+  };
+
+  it("lista as fazendas com talhão na safra", () => {
+    expect(farmsOfSeason(two, "2026/27").map((f) => f.name)).toEqual(["Boa Vista", "Santa Fé"]);
+    expect(farmsOfSeason(two, "2025/26").map((f) => f.name)).toEqual(["Boa Vista"]);
+  });
+
+  it("todas as fazendas somam tudo", () => {
+    const all = seasonReport("2026/27", two, TODAY);
+    expect([all.areaHa, all.plots.length, all.finance.totalCost]).toEqual([190, 3, 42_000 + 8_000 + 18_000 + 2_000]);
+  });
+
+  it("só a fazenda escolhida, com as vendas e despesas lançadas para ela", () => {
+    const r = seasonReport("2026/27", forFarm(two, "f2"), TODAY);
+    expect(r.plots.map((p) => p.plotName)).toEqual(["A1"]);
+    expect([r.areaHa, r.yieldPerHa, r.cost]).toEqual([40, 60, 8_000]);
+    expect(r.rain).toEqual([{ farmName: "Santa Fé", mm: 12 }]);
+    expect(r.finance.totalCost).toBe(10_000);
+    expect(r.finance.revenue).toBe(220_000);
+    expect(r.history.map((h) => h.label)).toEqual(["2026/27"]);
+  });
+
+  it("lançamentos da conta toda ficam fora da fazenda e são informados à parte", () => {
+    const r = seasonReport("2026/27", forFarm(two, "f1"), TODAY);
+    expect([r.areaHa, r.finance.totalCost, r.finance.margin]).toEqual([150, 42_000, null]);
+    expect(accountWide(two, "2026/27")).toEqual({ sales: 1, revenue: 1_152_000, expenses: 1, expensesCost: 18_000 });
   });
 });

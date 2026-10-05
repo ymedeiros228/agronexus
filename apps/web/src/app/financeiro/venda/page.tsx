@@ -5,7 +5,8 @@ import { Suspense, useState, type FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useLiveQuery } from "dexie-react-hooks";
 import { Button, Card, Empty, Field, LinkButton, PageTitle, inputClass } from "@/components/ui";
-import { alive, db, removeSale, type Sale } from "@/lib/db";
+import { alive, db, removeSale, type Farm, type Sale } from "@/lib/db";
+import { FarmField, byFarmName } from "@/components/farm-field";
 import { saveSale } from "@/lib/finance";
 import { todayISO } from "@/lib/format";
 import { formatBRL, formatNumberBR, parseNumberBR, seasonLabels } from "@/lib/operations";
@@ -15,8 +16,9 @@ function SaleEntry() {
   const id = params.get("id") ?? "";
   const data = useLiveQuery(async () => {
     const labels = seasonLabels(alive(await db.seasons.toArray()));
+    const farms = alive(await db.farms.toArray()).sort(byFarmName);
     const sale = id ? ((await db.sales.get(id)) ?? null) : null;
-    return { labels, sale: sale && !sale.deletedAt ? sale : null };
+    return { labels, farms, sale: sale && !sale.deletedAt ? sale : null };
   }, [id]);
 
   if (!data) return null;
@@ -31,12 +33,38 @@ function SaleEntry() {
   }
   const label = data.sale?.seasonLabel ?? params.get("safra") ?? data.labels[0] ?? "";
   const labels = data.labels.includes(label) || !label ? data.labels : [label, ...data.labels];
-  return <SaleForm key={data.sale?.id ?? "nova"} sale={data.sale} labels={labels} initialLabel={label} />;
+  return (
+    <SaleForm
+      key={data.sale?.id ?? "nova"}
+      sale={data.sale}
+      labels={labels}
+      initialLabel={label}
+      farms={data.farms}
+      initialFarm={data.sale ? (data.sale.farmId ?? "") : (params.get("fazenda") ?? "")}
+      returnFarm={params.get("fazenda") ?? ""}
+    />
+  );
 }
 
-function SaleForm({ sale, labels, initialLabel }: { sale: Sale | null; labels: string[]; initialLabel: string }) {
+function SaleForm({
+  sale,
+  labels,
+  initialLabel,
+  farms,
+  initialFarm,
+  returnFarm,
+}: {
+  sale: Sale | null;
+  labels: string[];
+  initialLabel: string;
+  farms: Farm[];
+  initialFarm: string;
+  /** Filtro de fazenda do financeiro de onde veio, para voltar nele. */
+  returnFarm: string;
+}) {
   const router = useRouter();
   const [seasonLabel, setSeasonLabel] = useState(initialLabel);
+  const [farmId, setFarmId] = useState(initialFarm);
   const [date, setDate] = useState(sale?.date ?? todayISO());
   const [bags, setBags] = useState(formatNumberBR(sale?.bags, 1));
   const [price, setPrice] = useState(formatNumberBR(sale?.pricePerBag, 2));
@@ -47,7 +75,7 @@ function SaleForm({ sale, labels, initialLabel }: { sale: Sale | null; labels: s
 
   const bagsN = parseNumberBR(bags);
   const priceN = parseNumberBR(price);
-  const back = `/financeiro?safra=${encodeURIComponent(seasonLabel)}`;
+  const back = `/financeiro?safra=${encodeURIComponent(seasonLabel)}${returnFarm ? `&fazenda=${returnFarm}` : ""}`;
 
   async function save(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -58,7 +86,7 @@ function SaleForm({ sale, labels, initialLabel }: { sale: Sale | null; labels: s
     setError("");
     setSaving(true);
     try {
-      await saveSale({ seasonLabel, date, bags: bagsN, pricePerBag: priceN, buyer, note }, sale?.id);
+      await saveSale({ seasonLabel, date, bags: bagsN, pricePerBag: priceN, buyer, note, farmId }, sale?.id);
       router.push(back);
     } catch (err) {
       setSaving(false);
@@ -96,6 +124,7 @@ function SaleForm({ sale, labels, initialLabel }: { sale: Sale | null; labels: s
             <input type="date" required value={date} onChange={(e) => setDate(e.target.value)} className={inputClass} />
           </Field>
         </div>
+        <FarmField farms={farms} value={farmId} onChange={setFarmId} what="o grão" />
         <div className="grid grid-cols-2 gap-3">
           <Field label="Sacas (60 kg)">
             <input

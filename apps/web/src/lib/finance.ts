@@ -81,12 +81,12 @@ export function seasonFinance(label: string, stats: SeasonStats, sales: Sale[], 
   };
 }
 
-export type SaleInput = Pick<Sale, "seasonLabel" | "date" | "bags" | "pricePerBag" | "buyer" | "note">;
+export type SaleInput = Pick<Sale, "seasonLabel" | "date" | "bags" | "pricePerBag" | "buyer" | "note" | "farmId">;
 
 export async function saveSale(input: SaleInput, id?: string): Promise<string> {
   if (!(input.bags > 0)) throw new Error("Informe quantas sacas foram vendidas.");
   if (!(input.pricePerBag > 0)) throw new Error("Informe o preço por saca.");
-  const data = { ...input, buyer: input.buyer.trim(), note: input.note.trim() };
+  const data = { ...input, buyer: input.buyer.trim(), note: input.note.trim(), farmId: input.farmId || null };
   if (id) {
     await db.sales.update(id, { ...data, updatedAt: Date.now() });
     return id;
@@ -96,11 +96,11 @@ export async function saveSale(input: SaleInput, id?: string): Promise<string> {
   return row.id;
 }
 
-export type ExpenseInput = Pick<Expense, "seasonLabel" | "date" | "category" | "description" | "amount">;
+export type ExpenseInput = Pick<Expense, "seasonLabel" | "date" | "category" | "description" | "amount" | "farmId">;
 
 export async function saveExpense(input: ExpenseInput, id?: string): Promise<string> {
   if (!(input.amount > 0)) throw new Error("Informe o valor da despesa.");
-  const data = { ...input, description: input.description.trim() };
+  const data = { ...input, description: input.description.trim(), farmId: input.farmId || null };
   if (id) {
     await db.expenses.update(id, { ...data, updatedAt: Date.now() });
     return id;

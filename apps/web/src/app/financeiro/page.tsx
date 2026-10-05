@@ -9,16 +9,19 @@ import { Card, Empty, LinkButton, PageTitle, SectionTitle } from "@/components/u
 import { EXPENSE_NAME, seasonFinance } from "@/lib/finance";
 import { formatDate, todayISO } from "@/lib/format";
 import { KIND_NAME, formatBRL, formatNumberBR, seasonLabels, seasonStats } from "@/lib/operations";
+import { accountWide, farmsOfSeason, forFarm } from "@/lib/report";
 import { loadReportInput } from "@/lib/report-data";
 
 function Finance() {
   const router = useRouter();
-  const asked = useSearchParams().get("safra") ?? "";
+  const params = useSearchParams();
+  const asked = params.get("safra") ?? "";
+  const askedFarm = params.get("fazenda") ?? "";
   const data = useLiveQuery(async () => ({ input: await loadReportInput(), today: todayISO() }));
   if (!data) return null;
 
-  const { input, today } = data;
-  const labels = seasonLabels(input.seasons);
+  const { input: all, today } = data;
+  const labels = seasonLabels(all.seasons);
   if (labels.length === 0) {
     return (
       <>
@@ -33,7 +36,13 @@ function Finance() {
   }
 
   const label = labels.includes(asked) ? asked : labels[0];
-  const q = encodeURIComponent(label);
+  const farmOptions = farmsOfSeason(all, label);
+  const farmId = farmOptions.length > 1 && farmOptions.some((f) => f.id === askedFarm) ? askedFarm : "";
+  const farmName = new Map(all.farms.map((f) => [f.id, f.name]));
+  const input = farmId ? forFarm(all, farmId) : all;
+  const outside = farmId ? accountWide(all, label) : null;
+  const go = (l: string, f: string) => router.replace(`/financeiro?safra=${encodeURIComponent(l)}${f ? `&fazenda=${f}` : ""}`);
+  const q = `${encodeURIComponent(label)}${farmId ? `&fazenda=${farmId}` : ""}`;
   const stats = seasonStats(label, input.seasons, input.plots, input.operations, today);
   const f = seasonFinance(label, stats, input.sales, input.expenses);
   const sales = input.sales.filter((s) => s.seasonLabel === label).sort((a, b) => (a.date < b.date ? 1 : -1));
@@ -53,7 +62,7 @@ function Finance() {
             <span className="sr-only">Safra</span>
             <select
               value={label}
-              onChange={(e) => router.replace(`/financeiro?safra=${encodeURIComponent(e.target.value)}`)}
+              onChange={(e) => go(e.target.value, farmId)}
               className="min-h-10 rounded-xl border border-border bg-surface px-3 text-sm font-medium"
             >
               {labels.map((l) => (
@@ -65,6 +74,33 @@ function Finance() {
           </label>
         }
       />
+
+      {farmOptions.length > 1 ? (
+        <label className="block sm:max-w-sm">
+          <span className="sr-only">Fazenda</span>
+          <select
+            value={farmId}
+            onChange={(e) => go(label, e.target.value)}
+            className="min-h-11 w-full rounded-xl border border-border bg-surface px-3 text-sm font-medium"
+          >
+            <option value="">Todas as fazendas ({farmOptions.length})</option>
+            {farmOptions.map((f) => (
+              <option key={f.id} value={f.id}>
+                Só {f.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : null}
+
+      {outside && (outside.sales > 0 || outside.expenses > 0) ? (
+        <p className="rounded-xl bg-accent/10 px-3 py-2 text-sm">
+          Não entram nesta fazenda os lançamentos da conta toda:
+          {outside.expenses > 0 ? ` ${formatBRL(outside.expensesCost)} em despesas` : ""}
+          {outside.expenses > 0 && outside.sales > 0 ? " e" : ""}
+          {outside.sales > 0 ? ` ${formatBRL(outside.revenue)} em vendas` : ""}.
+        </p>
+      ) : null}
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat
@@ -126,9 +162,11 @@ function Finance() {
                 {sales.map((s) => (
                   <Row
                     key={s.id}
-                    href={`/financeiro/venda?id=${s.id}`}
+                    href={`/financeiro/venda?id=${s.id}${farmId ? `&fazenda=${farmId}` : ""}`}
                     title={`${formatNumberBR(s.bags, 0)} sc × ${formatBRL(s.pricePerBag, 2)}`}
-                    sub={[formatDate(s.date), s.buyer, s.note].filter(Boolean).join(" · ")}
+                    sub={[formatDate(s.date), !farmId && s.farmId ? farmName.get(s.farmId) : "", s.buyer, s.note]
+                      .filter(Boolean)
+                      .join(" · ")}
                     amount={formatBRL(s.bags * s.pricePerBag)}
                   />
                 ))}
@@ -155,9 +193,11 @@ function Finance() {
                 {expenses.map((e) => (
                   <Row
                     key={e.id}
-                    href={`/financeiro/despesa?id=${e.id}`}
+                    href={`/financeiro/despesa?id=${e.id}${farmId ? `&fazenda=${farmId}` : ""}`}
                     title={EXPENSE_NAME[e.category]}
-                    sub={[formatDate(e.date), e.description].filter(Boolean).join(" · ")}
+                    sub={[formatDate(e.date), !farmId && e.farmId ? farmName.get(e.farmId) : "", e.description]
+                      .filter(Boolean)
+                      .join(" · ")}
                     amount={formatBRL(e.amount)}
                   />
                 ))}
