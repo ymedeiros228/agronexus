@@ -1,11 +1,12 @@
 "use client";
 
+import { toast } from "@/components/toaster";
 import Link from "next/link";
 import { Suspense, useState, type FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useLiveQuery } from "dexie-react-hooks";
 import { Button, Card, Empty, Field, inputClass, LinkButton, PageSkeleton, PageTitle } from "@/components/ui";
-import { alive, db, removeStockMove, type StockMove, type Supply } from "@/lib/db";
+import { alive, db, removeStockMove, type StockMove, type Supply, restoreRemoved } from "@/lib/db";
 import { formatDate, todayISO } from "@/lib/format";
 import { formatBRL, formatNumberBR, parseNumberBR } from "@/lib/operations";
 import { currentStock, formatQty, formatSignedQty, saveCount, saveEntry } from "@/lib/stock";
@@ -119,7 +120,8 @@ function EntryForm({ supplies, initialSupplyId, move }: { supplies: Supply[]; in
 
   async function remove() {
     if (!move || !window.confirm("Excluir esta entrada? O saldo do insumo diminui.")) return;
-    await removeStockMove(move.id);
+    const at = await removeStockMove(move.id);
+    toast("Entrada excluída.", { undo: () => restoreRemoved(at) });
     router.push(`/insumo?id=${move.supplyId}`);
   }
 
@@ -271,7 +273,8 @@ function AdjustmentView({ move, supplies }: { move: StockMove; supplies: Supply[
 
   async function remove() {
     if (!window.confirm("Excluir este ajuste? O saldo volta a ser o de antes da contagem.")) return;
-    await removeStockMove(move.id);
+    const at = await removeStockMove(move.id);
+    toast("Ajuste excluído.", { undo: () => restoreRemoved(at) });
     router.push(`/insumo?id=${move.supplyId}`);
   }
 

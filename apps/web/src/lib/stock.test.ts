@@ -186,7 +186,7 @@ describe("estoque no banco", () => {
     await removePlot("p1");
     expect(alive(await db.stockMoves.where("operationId").equals(id2).toArray())).toEqual([]);
 
-    expect(await removeSupply(a)).toEqual({ ok: true });
+    expect(await removeSupply(a)).toMatchObject({ ok: true });
     expect(alive(await db.stockMoves.where("supplyId").equals(a).toArray())).toEqual([]);
   });
 

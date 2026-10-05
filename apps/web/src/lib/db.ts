@@ -256,13 +256,22 @@ export function alive<T extends { deletedAt?: number }>(rows: T[]): T[] {
   return rows.filter((r) => !r.deletedAt);
 }
 
+let lastMark = 0;
+
+/** Carimbo de remoção, sempre diferente do anterior: é por ele que o "desfazer" acha a cascata. */
 function gone() {
-  const now = Date.now();
+  const now = (lastMark = Math.max(Date.now(), lastMark + 1));
   return { deletedAt: now, updatedAt: now };
 }
 
-export function removeRainfall(id: string) {
-  return db.rainfall.update(id, gone());
+/**
+ * As funções de remover devolvem o carimbo `deletedAt` usado: a cascata inteira
+ * leva o mesmo, e `restoreRemoved` desfaz tudo de uma vez.
+ */
+export async function removeRainfall(id: string): Promise<number> {
+  const mark = gone();
+  await db.rainfall.update(id, mark);
+  return mark.deletedAt;
 }
 
 /** Achados e fotos das visitas removidas também saem (dentro de uma transação que inclua findings e photos). */
@@ -272,12 +281,13 @@ async function removeVisitChildren(visitIds: string[], mark: ReturnType<typeof g
   await db.photos.where("visitId").anyOf(visitIds).filter((r) => !r.deletedAt).modify(mark);
 }
 
-export async function removeVisit(id: string) {
+export async function removeVisit(id: string): Promise<number> {
   const mark = gone();
   await db.transaction("rw", [db.visits, db.findings, db.photos], async () => {
     await db.visits.update(id, mark);
     await removeVisitChildren([id], mark);
   });
+  return mark.deletedAt;
 }
 
 export function setFollowUpDone(id: string, done: boolean) {
@@ -322,13 +332,14 @@ async function removePlotsCascade(plotIds: string[], mark: ReturnType<typeof gon
 }
 
 /** Remove o talhão com safras, visitas e operações (exclusão lógica). */
-export async function removePlot(id: string) {
+export async function removePlot(id: string): Promise<number> {
   const mark = gone();
   await db.transaction("rw", PLOT_TABLES(), () => removePlotsCascade([id], mark));
+  return mark.deletedAt;
 }
 
 /** Remove a fazenda com talhões (e tudo deles), chuvas, vendas e despesas (exclusão lógica). */
-export async function removeFarm(id: string) {
+export async function removeFarm(id: string): Promise<number> {
   const mark = gone();
   const tables = [db.farms, db.rainfall, db.sales, db.expenses, ...PLOT_TABLES()];
   await db.transaction("rw", tables, async () => {
@@ -346,33 +357,41 @@ export async function removeFarm(id: string) {
     await db.sales.filter((r) => r.farmId === id && !r.deletedAt).modify(mark);
     await db.expenses.filter((r) => r.farmId === id && !r.deletedAt).modify(mark);
   });
+  return mark.deletedAt;
 }
 
-export async function removeOperation(id: string) {
+export async function removeOperation(id: string): Promise<number> {
   const mark = gone();
   await db.transaction("rw", [db.operations, db.stockMoves], async () => {
     await db.operations.update(id, mark);
     await removeUses([id], mark);
   });
+  return mark.deletedAt;
 }
 
-export function removeStockMove(id: string) {
-  return db.stockMoves.update(id, gone());
+export async function removeStockMove(id: string): Promise<number> {
+  const mark = gone();
+  await db.stockMoves.update(id, mark);
+  return mark.deletedAt;
 }
 
-export function removeSale(id: string) {
-  return db.sales.update(id, gone());
+export async function removeSale(id: string): Promise<number> {
+  const mark = gone();
+  await db.sales.update(id, mark);
+  return mark.deletedAt;
 }
 
-export function removeExpense(id: string) {
-  return db.expenses.update(id, gone());
+export async function removeExpense(id: string): Promise<number> {
+  const mark = gone();
+  await db.expenses.update(id, mark);
+  return mark.deletedAt;
 }
 
 /**
  * Remove o insumo e as entradas/ajustes dele. Recusa se ele foi usado em alguma operação,
  * para não apagar parte do registro da operação.
  */
-export async function removeSupply(id: string): Promise<{ ok: true } | { ok: false; usedIn: number }> {
+export async function removeSupply(id: string): Promise<{ ok: true; at: number } | { ok: false; usedIn: number }> {
   return db.transaction("rw", [db.supplies, db.stockMoves, db.operations], async () => {
     const moves = alive(await db.stockMoves.where("supplyId").equals(id).toArray());
     const opIds = [...new Set(moves.filter((m) => m.kind === "uso" && m.operationId).map((m) => m.operationId!))];
@@ -381,7 +400,24 @@ export async function removeSupply(id: string): Promise<{ ok: true } | { ok: fal
     const mark = gone();
     await db.supplies.update(id, mark);
     await db.stockMoves.where("supplyId").equals(id).filter((m) => !m.deletedAt).modify(mark);
-    return { ok: true } as const;
+    return { ok: true, at: mark.deletedAt } as const;
+  });
+}
+
+const DATA_TABLES = () => db.tables.filter((t) => t.name !== "meta");
+
+/** Desfaz uma remoção: volta tudo o que foi removido com o carimbo `at`. */
+export async function restoreRemoved(at: number) {
+  const now = Date.now();
+  await db.transaction("rw", DATA_TABLES(), async () => {
+    for (const t of DATA_TABLES()) {
+      await t
+        .filter((r: { deletedAt?: number }) => r.deletedAt === at)
+        .modify((r: { deletedAt?: number; updatedAt: number }) => {
+          delete r.deletedAt;
+          r.updatedAt = now;
+        });
+    }
   });
 }
 

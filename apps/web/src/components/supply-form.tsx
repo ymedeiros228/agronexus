@@ -1,10 +1,11 @@
 "use client";
 
+import { toast } from "@/components/toaster";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { Button, Card, Field, PageTitle, inputClass } from "@/components/ui";
-import { removeSupply, type SupplyCategory } from "@/lib/db";
+import { removeSupply, type SupplyCategory, restoreRemoved } from "@/lib/db";
 import { formatNumberBR, parseNumberBR } from "@/lib/operations";
 import { SUPPLY_CATEGORIES, UNITS, saveSupply, type SupplyInput } from "@/lib/stock";
 
@@ -39,6 +40,7 @@ export function SupplyForm({ id, initial }: { id?: string; initial?: SupplyInput
     if (!id || !window.confirm("Excluir este insumo e as entradas dele?")) return;
     const result = await removeSupply(id);
     if (result.ok) {
+      toast("Insumo excluído.", { undo: () => restoreRemoved(result.at) });
       router.push("/insumos");
     } else {
       setError(

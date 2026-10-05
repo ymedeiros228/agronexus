@@ -1,11 +1,12 @@
 "use client";
 
+import { toast } from "@/components/toaster";
 import Link from "next/link";
 import { Suspense, useState, type FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useLiveQuery } from "dexie-react-hooks";
 import { Button, Card, Empty, Field, inputClass, LinkButton, PageSkeleton, PageTitle } from "@/components/ui";
-import { alive, db, removeExpense, type Expense, type ExpenseCategory, type Farm } from "@/lib/db";
+import { alive, db, removeExpense, type Expense, type ExpenseCategory, type Farm, restoreRemoved } from "@/lib/db";
 import { FarmField, byFarmName } from "@/components/farm-field";
 import { EXPENSE_CATEGORIES, saveExpense } from "@/lib/finance";
 import { todayISO } from "@/lib/format";
@@ -97,7 +98,8 @@ function ExpenseForm({
 
   async function remove() {
     if (!expense || !window.confirm("Excluir esta despesa?")) return;
-    await removeExpense(expense.id);
+    const at = await removeExpense(expense.id);
+    toast("Despesa excluída.", { undo: () => restoreRemoved(at) });
     router.push(back);
   }
 

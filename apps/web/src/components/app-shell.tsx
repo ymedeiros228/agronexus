@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { DemoBanner } from "./demo-bits";
 import { OnlineBadge } from "./online-badge";
+import { Toaster } from "./toaster";
 
 type NavItem = { href: string; label: string; short: string; icon: LucideIcon; match: (p: string) => boolean };
 
@@ -219,6 +220,8 @@ export function AppShell({ children }: { children: ReactNode }) {
         <DemoBanner />
         {children}
       </main>
+
+      <Toaster />
 
       {/* Celular: navegação inferior */}
       <nav

@@ -1,5 +1,6 @@
 "use client";
 
+import { toast } from "@/components/toaster";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
@@ -8,7 +9,7 @@ import { OperationIcon } from "@/components/operation-bits";
 import { SuppliesEditor, rowsFromUses, rowsToUses, validateRows, type SupplyRow } from "@/components/operation-supplies";
 import { PlotPickerFields, usePlotPicker } from "@/components/plot-picker";
 import { Button, Card, Empty, Field, LinkButton, PageTitle, inputClass } from "@/components/ui";
-import { alive, db, removeOperation, type OperationKind, type OperationStatus } from "@/lib/db";
+import { alive, db, removeOperation, type OperationKind, type OperationStatus, restoreRemoved } from "@/lib/db";
 import { todayISO } from "@/lib/format";
 import {
   OPERATION_KINDS,
@@ -106,7 +107,8 @@ export function OperationForm({ id, initial, initialUses, defaultFarmId, default
 
   async function remove() {
     if (!id || !window.confirm("Excluir esta operação?")) return;
-    await removeOperation(id);
+    const at = await removeOperation(id);
+    toast("Operação excluída.", { undo: () => restoreRemoved(at) });
     router.push("/operacoes");
   }
 

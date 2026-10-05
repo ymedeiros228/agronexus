@@ -1,5 +1,6 @@
 "use client";
 
+import { toast } from "@/components/toaster";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState, type FormEvent } from "react";
@@ -8,7 +9,7 @@ import { ChevronRight, CloudRain, X } from "lucide-react";
 import { ShapeThumb } from "@/components/map-bits";
 import { VisitRow } from "@/components/visit-row";
 import { Button, Card, Chip, Empty, Field, inputClass, LinkButton, PageSkeleton, PageTitle, rejectField, SectionTitle } from "@/components/ui";
-import { alive, db, newBase, removeFarm, removeRainfall, updateFarm } from "@/lib/db";
+import { alive, db, newBase, removeFarm, removeRainfall, updateFarm, restoreRemoved } from "@/lib/db";
 import { formatDate, plotLabel, todayISO } from "@/lib/format";
 import { formatNumberBR, parseNumberBR, seasonLabels } from "@/lib/operations";
 import { SEASON_LABEL_PATTERN, daysSince, latestSeason, normalizeSeasonLabel, seasonLabelFor } from "@/lib/season";
@@ -97,7 +98,8 @@ function Farm() {
     const n = data.visits.length;
     const extra = n ? `, os talhões e ${n === 1 ? "1 visita" : `${n} visitas`}` : " e os talhões";
     if (!window.confirm(`Remover ${data.farm.name}${extra}? Faça um backup antes, se tiver dúvida.`)) return;
-    await removeFarm(id);
+    const at = await removeFarm(id);
+    toast(`${data.farm.name} removida.`, { undo: () => restoreRemoved(at) });
     router.push("/fazendas");
   }
 
@@ -305,7 +307,10 @@ function Farm() {
                   <span className="w-16 shrink-0 text-right font-medium tabular-nums">{formatNumberBR(r.mm, 1)} mm</span>
                   <button
                     type="button"
-                    onClick={() => removeRainfall(r.id)}
+                    onClick={async () => {
+                      const at = await removeRainfall(r.id);
+                      toast(`Chuva de ${formatDate(r.date)} removida.`, { undo: () => restoreRemoved(at) });
+                    }}
                     className="-m-2 grid size-9 shrink-0 place-items-center rounded-full text-muted hover:bg-danger/10 hover:text-danger"
                     aria-label={`Remover chuva de ${formatDate(r.date)}`}
                   >

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { db, newBase, removeFarm, removePlot, removeVisit } from "./db";
+import { alive, db, newBase, removeFarm, removePlot, removeVisit, restoreRemoved } from "./db";
 
 beforeEach(async () => {
   await Promise.all(db.tables.map((t) => t.clear()));
@@ -58,5 +58,20 @@ describe("exclusão em cascata", () => {
       expect(await isGone(t, id)).toBe(true);
     }
     expect((await db.plots.get("p1"))!.deletedAt).toBe(firstMark);
+  });
+});
+
+describe("restoreRemoved", () => {
+  it("desfaz a cascata inteira de uma fazenda e só ela", async () => {
+    await seed();
+    const visitAt = await removeVisit("v2");
+    const at = await removeFarm("f1");
+    expect(at).not.toBe(visitAt);
+    await restoreRemoved(at);
+    expect(alive(await db.farms.toArray())).toHaveLength(1);
+    expect(alive(await db.plots.toArray())).toHaveLength(2);
+    // A visita apagada antes continua apagada.
+    expect((await db.visits.get("v2"))?.deletedAt).toBe(visitAt);
+    expect((await db.visits.get("v1"))?.deletedAt).toBeUndefined();
   });
 });

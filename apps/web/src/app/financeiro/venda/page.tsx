@@ -1,11 +1,12 @@
 "use client";
 
+import { toast } from "@/components/toaster";
 import Link from "next/link";
 import { Suspense, useState, type FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useLiveQuery } from "dexie-react-hooks";
 import { Button, Card, Empty, Field, inputClass, LinkButton, PageSkeleton, PageTitle } from "@/components/ui";
-import { alive, db, removeSale, type Farm, type Sale } from "@/lib/db";
+import { alive, db, removeSale, type Farm, type Sale, restoreRemoved } from "@/lib/db";
 import { FarmField, byFarmName } from "@/components/farm-field";
 import { saveSale } from "@/lib/finance";
 import { todayISO } from "@/lib/format";
@@ -96,7 +97,8 @@ function SaleForm({
 
   async function remove() {
     if (!sale || !window.confirm("Excluir esta venda?")) return;
-    await removeSale(sale.id);
+    const at = await removeSale(sale.id);
+    toast("Venda excluída.", { undo: () => restoreRemoved(at) });
     router.push(back);
   }
 

@@ -1,5 +1,6 @@
 "use client";
 
+import { toast } from "@/components/toaster";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
@@ -7,7 +8,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { BlobImg } from "@/components/blob-img";
 import { Button, Card, Chip, Empty, LinkButton, PageSkeleton, SectionTitle } from "@/components/ui";
 import { KIND_LABEL } from "@/lib/catalog";
-import { alive, db, removeVisit, setFollowUpDone } from "@/lib/db";
+import { alive, db, removeVisit, setFollowUpDone, restoreRemoved } from "@/lib/db";
 import { formatDate } from "@/lib/format";
 import { daysSince, latestSeason } from "@/lib/season";
 
@@ -100,7 +101,8 @@ function Visit() {
 
   async function remove() {
     if (!window.confirm("Excluir esta visita?")) return;
-    await removeVisit(id);
+    const at = await removeVisit(id);
+    toast("Visita excluída.", { undo: () => restoreRemoved(at) });
     router.push("/");
   }
 

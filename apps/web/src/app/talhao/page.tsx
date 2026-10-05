@@ -1,5 +1,6 @@
 "use client";
 
+import { toast } from "@/components/toaster";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState, type FormEvent } from "react";
@@ -8,7 +9,7 @@ import { Button, Card, Chip, Empty, Field, inputClass, LinkButton, PageSkeleton,
 import { BoundaryCard } from "@/components/boundary";
 import { OperationRow } from "@/components/operation-row";
 import { KIND_LABEL } from "@/lib/catalog";
-import { addSeason, alive, db, removePlot, updatePlot, updateSeason, type Finding, type Season, type Visit } from "@/lib/db";
+import { addSeason, alive, db, removePlot, updatePlot, updateSeason, type Finding, type Season, type Visit, restoreRemoved } from "@/lib/db";
 import { formatDate, todayISO, plotLabel } from "@/lib/format";
 import { usesByOperation } from "@/lib/stock";
 import { formatBRL, formatNumberBR, isSpent, parseNumberBR, yieldByPlot } from "@/lib/operations";
@@ -102,7 +103,8 @@ function Plot() {
       ? `Remover o talhão ${plot.name} e ${n === 1 ? "1 visita" : `${n} visitas`} dele?`
       : `Remover o talhão ${plot.name}?`;
     if (!window.confirm(msg)) return;
-    await removePlot(id);
+    const at = await removePlot(id);
+    toast(`${plotLabel(plot.name)} removido.`, { undo: () => restoreRemoved(at) });
     router.push(farm ? `/fazenda?id=${farm.id}` : "/fazendas");
   }
 
