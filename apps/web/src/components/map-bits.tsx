@@ -1,3 +1,4 @@
+import { MapPinned } from "lucide-react";
 import type { LngLat } from "@/lib/geo";
 import { polygonAreaHa, projectShapes } from "@/lib/geo";
 import { fitFontSize, plotShortName } from "@/lib/format";
@@ -51,6 +52,25 @@ export function MiniMap({ statuses, alerts }: { statuses: PlotStatus[]; alerts: 
         </g>
       ))}
       <title>{drawn.map((s) => `${s.plot.name}: ${formatNumberBR(polygonAreaHa(s.plot.boundary!), 1)} ha`).join(", ")}</title>
+    </svg>
+  );
+}
+
+/** Desenho pequeno dos contornos; sem contorno cadastrado, mostra um ícone. */
+export function ShapeThumb({ rings, size = "size-16" }: { rings: (LngLat[] | undefined | null)[]; size?: string }) {
+  const drawn = rings.filter((r): r is LngLat[] => (r?.length ?? 0) >= 3);
+  if (!drawn.length) {
+    return (
+      <span className={`grid ${size} shrink-0 place-items-center rounded-xl bg-brand-soft text-brand`} aria-hidden>
+        <MapPinned className="size-6" />
+      </span>
+    );
+  }
+  return (
+    <svg viewBox="0 0 64 64" className={`${size} shrink-0 rounded-xl bg-brand-soft`} aria-hidden>
+      {projectShapes(drawn, 64, 64, 7).map((shape, i) => (
+        <path key={i} d={shape.path} className="fill-brand/35 stroke-brand" strokeWidth={1.5} strokeLinejoin="round" />
+      ))}
     </svg>
   );
 }

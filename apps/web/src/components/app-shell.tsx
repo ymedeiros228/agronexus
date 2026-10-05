@@ -161,7 +161,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-dvh md:pl-64 print:pl-0">
       {/* Computador: barra lateral */}
-      <aside className="no-print fixed inset-y-0 left-0 z-20 hidden w-64 flex-col bg-sidebar px-4 py-5 text-sidebar-fg md:flex">
+      <aside className="no-print fixed inset-y-0 left-0 z-20 hidden w-64 flex-col overflow-y-auto bg-sidebar px-4 py-5 text-sidebar-fg md:flex">
         <div className="px-2">
           <Logo dark />
         </div>
@@ -198,7 +198,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             })}
           </ul>
         </nav>
-        <div className="space-y-2 px-2 text-xs text-sidebar-muted">
+        <div className="mt-4 space-y-2 px-2 text-xs text-sidebar-muted">
           <OnlineBadge />
           <p>Seus dados ficam neste aparelho. Faça backup em “Dados e backup”.</p>
         </div>

@@ -3,7 +3,22 @@
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
-import { ArrowRight, Bug, CircleDollarSign, LandPlot, MapPinned, Sprout, Tractor, TrendingUp, WifiOff, type LucideIcon } from "lucide-react";
+import {
+  ArrowRight,
+  Bug,
+  CalendarClock,
+  ChevronRight,
+  CircleDollarSign,
+  ClipboardList,
+  LandPlot,
+  MapPinned,
+  Package,
+  Sprout,
+  Tractor,
+  TrendingUp,
+  WifiOff,
+  type LucideIcon,
+} from "lucide-react";
 import { MiniMap, hasShape } from "@/components/map-bits";
 import { OperationRow } from "@/components/operation-row";
 import { VisitRow } from "@/components/visit-row";
@@ -11,14 +26,30 @@ import { Card, Chip, LinkButton, SectionTitle } from "@/components/ui";
 import { LAST_BACKUP_KEY } from "@/lib/backup";
 import { alive, db, getMeta, type OperationKind } from "@/lib/db";
 import { formatDate, todayISO, plotLabel } from "@/lib/format";
-import { KIND_NAME, formatBRL, formatNumberBR, seasonLabels, seasonStats, yieldByPlot } from "@/lib/operations";
+import { KIND_NAME, formatBRL, formatBRLShort, formatNumberBR, seasonLabels, seasonStats, yieldByPlot } from "@/lib/operations";
 import { NO_VISIT_ALERT_DAYS, buildPanel, type FarmStatus, type PlotStatus } from "@/lib/panel";
 import { seasonFinance } from "@/lib/finance";
 import { daysSince } from "@/lib/season";
 import { stockAlerts, stockOf, usesByOperation } from "@/lib/stock";
 
 /** Item do "Pede atenção": talhão (visita, retorno, operação) ou estoque. */
-type Attention = { key: string; title: string; sub: string; text: string; href: string; danger: boolean; weight: number };
+type Attention = {
+  key: string;
+  title: string;
+  sub: string;
+  text: string;
+  href: string;
+  danger: boolean;
+  weight: number;
+  icon: LucideIcon;
+};
+
+const ALERT_ICON: Record<string, LucideIcon> = {
+  "followup-overdue": CalendarClock,
+  "followup-today": CalendarClock,
+  "no-visit": ClipboardList,
+  "operation-late": Tractor,
+};
 
 /** Depois de quanto tempo sem backup o aviso aparece. */
 const BACKUP_NAG_MS = 3 * 86_400_000;
@@ -88,21 +119,23 @@ export default function Home() {
     const attention: Attention[] = [
       ...panel.alerts.map((a) => ({
         key: `${a.kind}-${a.href}`,
-        title: a.farmName,
-        sub: plotLabel(a.plotName),
+        title: plotLabel(a.plotName),
+        sub: a.farmName,
         text: a.text,
         href: a.href,
         danger: a.kind === "followup-overdue" || a.kind === "operation-late",
         weight: a.weight,
+        icon: ALERT_ICON[a.kind] ?? ClipboardList,
       })),
       ...stockAlerts(stockOf(liveSupplies, liveMoves, alive(operations))).map((a) => ({
         key: `${a.kind}-${a.href}`,
-        title: "Estoque",
-        sub: a.title,
+        title: a.title,
+        sub: "Estoque",
         text: a.text,
         href: a.href,
         danger: a.kind !== "stock-low",
         weight: a.weight,
+        icon: Package,
       })),
     ].sort((a, b) => b.weight - a.weight);
     return {
@@ -134,6 +167,14 @@ export default function Home() {
   const money = label && stats ? seasonFinance(label, stats, data.sales, data.expenses) : null;
   const yields = label ? yieldByPlot(label, data.seasons, data.operations) : [];
   const mapFarm = panel.farms.find((f) => f.plots.some(hasShape));
+  /** Sem colheita na safra escolhida, a média mostra a última safra colhida como referência. */
+  const pastYield =
+    stats && stats.yieldPerHa == null
+      ? labels
+          .filter((l) => l < (label ?? ""))
+          .map((l) => ({ label: l, stats: seasonStats(l, data.seasons, data.plots, data.operations, today) }))
+          .find((p) => p.stats.yieldPerHa != null)
+      : undefined;
 
   if (data.farms.length === 0) {
     return <Welcome />;
@@ -209,7 +250,9 @@ export default function Home() {
             sub={
               stats.yieldPerHa != null
                 ? `${formatNumberBR(stats.harvestedHa, 1)} ha colhidos`
-                : "Aparece quando registrar a colheita"
+                : pastYield
+                  ? `Safra ${pastYield.label}: ${formatNumberBR(pastYield.stats.yieldPerHa, 1)} sc/ha`
+                  : "Aparece quando registrar a colheita"
             }
           />
           <Kpi
@@ -253,17 +296,21 @@ export default function Home() {
               <SectionTitle>Pede atenção</SectionTitle>
               <Card className="divide-y divide-border p-0">
                 {data.attention.map((a) => (
-                  <Link key={a.key} href={a.href} className="flex items-center gap-3 p-4 active:bg-brand-soft">
-                    <span aria-hidden className={`size-2.5 shrink-0 rounded-full ${a.danger ? "bg-danger" : "bg-warn"}`} />
+                  <Link key={a.key} href={a.href} className="group flex items-center gap-3 p-3.5 transition hover:bg-brand-soft/40 active:bg-brand-soft">
+                    <span
+                      aria-hidden
+                      className={`grid size-10 shrink-0 place-items-center rounded-xl ${a.danger ? "bg-danger/10 text-danger" : "bg-warn/10 text-warn"}`}
+                    >
+                      <a.icon className="size-5" />
+                    </span>
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate font-medium">
-                        {a.title} <span className="text-muted">· {a.sub}</span>
+                      <span className="flex min-w-0 items-baseline gap-1.5">
+                        <span className="max-w-full shrink-0 truncate font-semibold">{a.title}</span>
+                        <span className="min-w-0 truncate text-xs text-muted">{a.sub}</span>
                       </span>
-                      <span className="block text-sm text-muted">{a.text}</span>
+                      <span className={`block text-sm ${a.danger ? "text-danger" : "text-muted"}`}>{a.text}</span>
                     </span>
-                    <span aria-hidden className="text-muted">
-                      ›
-                    </span>
+                    <ChevronRight aria-hidden className="size-4 shrink-0 text-muted transition group-hover:translate-x-0.5" />
                   </Link>
                 ))}
               </Card>
@@ -510,7 +557,7 @@ function CostDonut({ items, total }: { items: { kind: OperationKind; cost: numbe
       >
         <div className="grid size-[5.5rem] place-items-center rounded-full bg-surface text-center">
           <span>
-            <span className="block text-sm font-semibold">{formatBRL(total)}</span>
+            <span className="block text-base font-semibold tabular-nums">{formatBRLShort(total)}</span>
             <span className="block text-[10px] text-muted">em operações</span>
           </span>
         </div>

@@ -4,7 +4,10 @@ import Link from "next/link";
 import { useState, type FormEvent } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { Button, Card, Empty, Field, PageTitle, inputClass } from "@/components/ui";
+import { ChevronRight } from "lucide-react";
+import { ShapeThumb } from "@/components/map-bits";
 import { alive, db, newBase } from "@/lib/db";
+import { formatNumberBR } from "@/lib/operations";
 
 export default function FarmsPage() {
   const [open, setOpen] = useState(false);
@@ -68,20 +71,33 @@ export default function FarmsPage() {
           action={<Button onClick={() => setOpen(true)}>+ Fazenda</Button>}
         />
       ) : (
-        <ul className="space-y-3">
+        <ul className="grid grid-cols-1 gap-3 lg:grid-cols-2">
           {data.farms.map((farm) => {
-            const count = data.plots.filter((p) => p.farmId === farm.id).length;
+            const plots = data.plots.filter((p) => p.farmId === farm.id);
+            const area = plots.reduce((sum, p) => sum + (p.areaHa ?? 0), 0);
             return (
               <li key={farm.id}>
-                <Link href={`/fazenda?id=${farm.id}`} className="block active:scale-[0.99]">
-                  <Card className="transition hover:border-brand/40">
-                    <p className="font-medium">{farm.name}</p>
-                    <p className="mt-0.5 text-sm text-muted">
-                      {[farm.municipality, farm.owner].filter(Boolean).join(" · ") || "Sem detalhes"}
-                    </p>
-                    <p className="mt-2 text-sm text-muted">
-                      {count} {count === 1 ? "talhão" : "talhões"}
-                    </p>
+                <Link href={`/fazenda?id=${farm.id}`} className="group block active:scale-[0.99]">
+                  <Card className="flex items-center gap-4 transition group-hover:border-brand/40 group-hover:shadow-md">
+                    <ShapeThumb rings={plots.map((p) => p.boundary)} />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-semibold">{farm.name}</p>
+                      <p className="mt-0.5 truncate text-sm text-muted">
+                        {[farm.municipality, farm.owner].filter(Boolean).join(" · ") || "Sem detalhes"}
+                      </p>
+                      <p className="mt-2 flex flex-wrap gap-x-3 text-sm">
+                        <span>
+                          <b className="font-semibold tabular-nums">{plots.length}</b>{" "}
+                          <span className="text-muted">{plots.length === 1 ? "talhão" : "talhões"}</span>
+                        </span>
+                        {area > 0 ? (
+                          <span>
+                            <b className="font-semibold tabular-nums">{formatNumberBR(area, 1)}</b> <span className="text-muted">ha</span>
+                          </span>
+                        ) : null}
+                      </p>
+                    </div>
+                    <ChevronRight className="size-5 shrink-0 text-muted transition group-hover:translate-x-0.5 group-hover:text-brand" />
                   </Card>
                 </Link>
               </li>

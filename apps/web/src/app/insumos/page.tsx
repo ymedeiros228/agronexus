@@ -140,9 +140,12 @@ export default function SuppliesPage() {
                 <SupplyIcon category={s.supply.category} />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate font-medium">{s.supply.name}</span>
-                  <span className="mt-0.5 block truncate text-sm text-muted">
+                  <span
+                    className="mt-0.5 block truncate text-sm text-muted"
+                    title={s.lastDate ? `Último lançamento em ${formatDate(s.lastDate)}` : undefined}
+                  >
                     {CATEGORY_NAME[s.supply.category]}
-                    {s.lastDate ? ` · último lançamento ${formatDate(s.lastDate)}` : ""}
+                    {s.lastDate ? ` · ${formatDate(s.lastDate).slice(0, 5)}` : ""}
                   </span>
                   <span className="mt-1 flex flex-wrap gap-1.5">
                     <StockBadge stock={s} />

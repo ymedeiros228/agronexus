@@ -25,11 +25,9 @@ export function OperationRow({
 }) {
   const late = isLate(op, today);
   const shownDate = op.status === "concluida" ? (op.doneDate ?? op.date) : op.date;
-  const meta = [
+  const facts = [
     formatDate(shownDate),
-    farmName,
-    op.areaHa ? `${formatNumberBR(op.areaHa, 2)} ha` : null,
-    op.cost != null ? formatBRL(op.cost) : null,
+    op.areaHa ? `${formatNumberBR(op.areaHa, 1)} ha` : null,
     op.kind === "colheita" && op.yieldBags != null && op.areaHa
       ? `${formatNumberBR(op.yieldBags / op.areaHa, 1)} sc/ha`
       : null,
@@ -43,14 +41,18 @@ export function OperationRow({
     >
       <OperationIcon kind={op.kind} />
       <Link href={`/operacao?id=${op.id}`} className="min-w-0 flex-1">
-        <span className="block truncate font-medium">
-          {KIND_NAME[op.kind]} <span className="text-muted">· {plotLabel(plotName)}</span>
-        </span>
-        <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted">
+        <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <span className="font-semibold">{KIND_NAME[op.kind]}</span>
           <StatusPill status={op.status} late={late} />
-          <span className="min-w-0">{meta.join(" · ")}</span>
+        </span>
+        <span className="mt-0.5 block truncate text-sm text-muted">
+          {plotLabel(plotName)} · {farmName}
         </span>
         {op.description ? <span className="mt-1.5 line-clamp-2 block text-sm">{op.description}</span> : null}
+        <span className="mt-1.5 flex flex-wrap items-center gap-x-2 text-xs text-muted tabular-nums">
+          {facts.join(" · ")}
+          {op.cost != null ? <span className="font-semibold text-foreground">{formatBRL(op.cost)}</span> : null}
+        </span>
         {uses.length ? (
           <span className="mt-1.5 flex flex-wrap gap-1.5">
             {uses.map((u, i) => (

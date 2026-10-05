@@ -4,10 +4,12 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState, type FormEvent } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
+import { ChevronRight, CloudRain, X } from "lucide-react";
+import { ShapeThumb } from "@/components/map-bits";
 import { VisitRow } from "@/components/visit-row";
 import { Button, Card, Chip, Empty, Field, LinkButton, PageTitle, SectionTitle, inputClass, rejectField } from "@/components/ui";
 import { alive, db, newBase, removeFarm, removeRainfall, updateFarm } from "@/lib/db";
-import { formatDate, todayISO } from "@/lib/format";
+import { formatDate, plotLabel, todayISO } from "@/lib/format";
 import { formatNumberBR, parseNumberBR, seasonLabels } from "@/lib/operations";
 import { SEASON_LABEL_PATTERN, daysSince, latestSeason, normalizeSeasonLabel, seasonLabelFor } from "@/lib/season";
 
@@ -117,6 +119,8 @@ function Farm() {
   const cutoffISO = cutoff.toISOString().slice(0, 10);
   const last30 = rain.filter((r) => r.date >= cutoffISO).reduce((sum, r) => sum + r.mm, 0);
   const reportLabel = seasonLabels(seasons)[0];
+  const totalArea = plots.reduce((sum, p) => sum + (p.areaHa ?? 0), 0);
+  const maxRain = Math.max(1, ...rain.slice(0, 8).map((r) => r.mm));
 
   return (
     <>
@@ -156,6 +160,19 @@ function Farm() {
           </Button>
         </Card>
       ) : null}
+
+      <dl className="grid grid-cols-3 gap-2">
+        {[
+          { label: plots.length === 1 ? "Talhão" : "Talhões", value: String(plots.length) },
+          { label: "Área", value: totalArea ? `${formatNumberBR(totalArea, totalArea >= 1000 ? 0 : 1)} ha` : "—" },
+          { label: "Chuva 30 dias", value: `${formatNumberBR(last30, 1)} mm` },
+        ].map((stat) => (
+          <div key={stat.label} className="rounded-2xl border border-border bg-surface px-3 py-2.5">
+            <dt className="text-xs text-muted">{stat.label}</dt>
+            <dd className="mt-0.5 truncate text-base font-semibold tabular-nums sm:text-lg">{stat.value}</dd>
+          </div>
+        ))}
+      </dl>
 
       {reportLabel ? (
         <Link
@@ -209,34 +226,39 @@ function Farm() {
         {plots.length === 0 && !plotOpen ? (
           <Empty title="Nenhum talhão" text="Cadastre os talhões para registrar visitas nesta fazenda." />
         ) : (
-          <ul className="space-y-3">
+          <ul className="grid grid-cols-1 gap-3 lg:grid-cols-2">
             {plots.map((plot) => {
               const season = latestSeason(seasons.filter((s) => s.plotId === plot.id));
               const last = visits.find((v) => v.plotId === plot.id);
               return (
                 <li key={plot.id}>
                   <Card>
-                    <Link href={`/talhao?id=${plot.id}`} className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="font-medium">
-                          {plot.name} <span className="text-brand">›</span>
-                        </p>
+                    <Link href={`/talhao?id=${plot.id}`} className="group flex items-start gap-3">
+                      <ShapeThumb rings={[plot.boundary]} size="size-14" />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="flex min-w-0 items-center gap-1 font-semibold">
+                            <span className="truncate">{plotLabel(plot.name)}</span>
+                            <ChevronRight className="size-4 shrink-0 text-muted transition group-hover:text-brand" />
+                          </p>
+                          {season ? <Chip tone="muted">{season.label}</Chip> : null}
+                        </div>
                         <p className="mt-0.5 text-sm text-muted">
                           {plot.areaHa ? `${formatNumberBR(plot.areaHa, 2)} ha` : "Área não informada"}
                           {season?.cultivar ? ` · ${season.cultivar}` : ""}
                         </p>
                         {season?.plantingDate ? (
                           <p className="text-sm text-muted">
-                            Plantio: {formatDate(season.plantingDate)} · {daysSince(season.plantingDate)} dias
+                            Plantio {formatDate(season.plantingDate)} ·{" "}
+                            <span className="font-medium text-foreground">{daysSince(season.plantingDate)} dias</span>
                           </p>
                         ) : null}
                         {last ? (
                           <p className="text-sm text-muted">
-                            Última visita: {formatDate(last.date)} · {last.stage}
+                            Última visita {formatDate(last.date)} · {last.stage}
                           </p>
                         ) : null}
                       </div>
-                      {season ? <Chip tone="muted">Safra {season.label}</Chip> : null}
                     </Link>
                     <div className="mt-3">
                       <LinkButton
@@ -258,7 +280,9 @@ function Farm() {
       <section className="space-y-3">
         <div className="flex items-center justify-between">
           <SectionTitle>Chuva</SectionTitle>
-          <Chip tone="muted">Últimos 30 dias: {last30.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} mm</Chip>
+          <span className="flex items-center gap-1.5 text-sm text-muted">
+            <CloudRain className="size-4 text-sky-500" /> {formatNumberBR(last30, 1)} mm em 30 dias
+          </span>
         </div>
         <Card>
           <form onSubmit={addRain} className="grid grid-cols-[minmax(0,1fr)_5rem_auto] items-end gap-3">
@@ -273,18 +297,20 @@ function Farm() {
           {rain.length > 0 ? (
             <ul className="mt-4 divide-y divide-border">
               {rain.slice(0, 8).map((r) => (
-                <li key={r.id} className="flex items-center justify-between py-2 text-sm">
-                  <span>{formatDate(r.date)}</span>
-                  <span className="flex items-center gap-3">
-                    <span className="font-medium">{r.mm.toLocaleString("pt-BR")} mm</span>
-                    <button
-                      onClick={() => removeRainfall(r.id)}
-                      className="text-muted hover:text-danger"
-                      aria-label={`Remover chuva de ${formatDate(r.date)}`}
-                    >
-                      ✕
-                    </button>
+                <li key={r.id} className="flex items-center gap-3 py-2 text-sm">
+                  <span className="w-24 shrink-0 tabular-nums">{formatDate(r.date)}</span>
+                  <span className="h-2 flex-1 overflow-hidden rounded-full bg-border/60" aria-hidden>
+                    <span className="block h-full rounded-full bg-sky-500" style={{ width: `${(r.mm / maxRain) * 100}%` }} />
                   </span>
+                  <span className="w-16 shrink-0 text-right font-medium tabular-nums">{formatNumberBR(r.mm, 1)} mm</span>
+                  <button
+                    type="button"
+                    onClick={() => removeRainfall(r.id)}
+                    className="-m-2 grid size-9 shrink-0 place-items-center rounded-full text-muted hover:bg-danger/10 hover:text-danger"
+                    aria-label={`Remover chuva de ${formatDate(r.date)}`}
+                  >
+                    <X className="size-4" />
+                  </button>
                 </li>
               ))}
             </ul>
@@ -299,9 +325,11 @@ function Farm() {
             <p className="text-sm text-muted">Nenhuma visita nesta fazenda ainda.</p>
           </Card>
         ) : (
-          visits.map((v) => (
-            <VisitRow key={v.id} visit={v} farmName={farm.name} plotName={plotName.get(v.plotId) ?? "Talhão"} />
-          ))
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+            {visits.map((v) => (
+              <VisitRow key={v.id} visit={v} plotName={plotName.get(v.plotId) ?? "Talhão"} />
+            ))}
+          </div>
         )}
       </section>
     </>

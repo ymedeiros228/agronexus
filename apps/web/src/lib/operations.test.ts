@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { db, newBase, type Operation, type Plot, type Season } from "./db";
 import {
   completeOperation,
+  formatBRLShort,
   isLate,
   parseNumberBR,
   saveOperation,
@@ -206,5 +207,14 @@ describe("saveOperation", () => {
     const id = await saveOperation(input(), TODAY);
     await saveOperation(input({ plotId: "p2" }), TODAY, id);
     expect((await db.operations.get(id))?.seasonId).toBe("s2");
+  });
+});
+
+describe("formatBRLShort", () => {
+  it("encurta milhões e milhares", () => {
+    expect(formatBRLShort(5_906_851)).toBe("R$ 5,9 mi");
+    expect(formatBRLShort(12_400_000)).toBe("R$ 12 mi");
+    expect(formatBRLShort(312_000)).toBe("R$ 312 mil");
+    expect(formatBRLShort(850).replace(/\s/g, " ")).toBe("R$ 850");
   });
 });

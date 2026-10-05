@@ -47,6 +47,14 @@ export function formatBRL(n: number, digits = 0): string {
   return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: digits });
 }
 
+/** Valor curto para espaço apertado: "R$ 5,9 mi", "R$ 312 mil", "R$ 850". */
+export function formatBRLShort(n: number): string {
+  const abs = Math.abs(n);
+  if (abs >= 1e6) return `R$ ${formatNumberBR(n / 1e6, abs >= 1e7 ? 0 : 1)} mi`;
+  if (abs >= 1e4) return `R$ ${formatNumberBR(n / 1e3, 0)} mil`;
+  return formatBRL(n);
+}
+
 /** Planejada com data já passada. */
 export function isLate(op: Pick<Operation, "status" | "date">, today: string): boolean {
   return op.status === "planejada" && op.date < today;
