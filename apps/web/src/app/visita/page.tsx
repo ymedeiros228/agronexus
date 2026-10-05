@@ -1,15 +1,16 @@
 "use client";
 
-import { toast } from "@/components/toaster";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
+import { Bug, CircleHelp, ClipboardList, Microscope, Sprout, type LucideIcon } from "lucide-react";
 import { BlobImg } from "@/components/blob-img";
+import { toast } from "@/components/toaster";
 import { Button, Card, Chip, Empty, LinkButton, PageSkeleton, SectionTitle } from "@/components/ui";
 import { KIND_LABEL } from "@/lib/catalog";
-import { alive, db, removeVisit, setFollowUpDone, restoreRemoved } from "@/lib/db";
-import { formatDate } from "@/lib/format";
+import { alive, db, removeVisit, restoreRemoved, setFollowUpDone, type FindingKind } from "@/lib/db";
+import { formatDate, plotLabel } from "@/lib/format";
 import { daysSince, latestSeason } from "@/lib/season";
 
 export default function VisitPage() {
@@ -19,6 +20,14 @@ export default function VisitPage() {
     </Suspense>
   );
 }
+
+/** Cor e ícone de cada tipo de achado, para bater o olho na lista. */
+const FINDING_STYLE: Record<FindingKind, { icon: LucideIcon; tone: string }> = {
+  praga: { icon: Bug, tone: "bg-amber-500/15 text-amber-700 dark:text-amber-300" },
+  doenca: { icon: Microscope, tone: "bg-danger/10 text-danger" },
+  daninha: { icon: Sprout, tone: "bg-brand-soft text-brand" },
+  outro: { icon: CircleHelp, tone: "bg-border/60 text-muted" },
+};
 
 function Visit() {
   const id = useSearchParams().get("id") ?? "";
@@ -114,20 +123,28 @@ function Visit() {
         </Link>
       </div>
 
-      <header className="space-y-1">
-        <p className="text-xs font-semibold uppercase tracking-wider text-muted">Relatório de visita</p>
-        <h1 className="text-2xl font-semibold tracking-tight">
-          {farm?.name ?? "Fazenda"} <span className="text-muted">· {plot?.name ?? "Talhão"}</span>
-        </h1>
-        <p className="text-sm text-muted">
-          {formatDate(visit.date)} · Estágio {visit.stage}
-          {dap !== null ? ` · ${dap} DAP` : ""}
-          {season?.cultivar ? ` · ${season.cultivar}` : ""}
-          {season ? ` · safra ${season.label}` : ""}
+      <header className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#0f2b1c] via-[#14532f] to-[#1c6b41] p-5 text-white shadow-lg shadow-[#1c6b41]/20 sm:p-6 print:bg-none print:p-0 print:text-black print:shadow-none">
+        <ClipboardList aria-hidden className="pointer-events-none absolute -bottom-8 -right-6 size-40 text-white/[0.06] print:hidden" />
+        <p className="text-xs font-semibold uppercase tracking-wider text-white/60 print:text-muted">
+          Relatório de visita · {formatDate(visit.date)}
         </p>
-        {farm?.owner || farm?.municipality ? (
-          <p className="text-sm text-muted">{[farm.owner, farm.municipality].filter(Boolean).join(" · ")}</p>
-        ) : null}
+        <h1 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">{plotLabel(plot?.name)}</h1>
+        <p className="mt-0.5 text-white/75 print:text-muted">
+          {[farm?.name ?? "Fazenda", farm?.owner, farm?.municipality].filter(Boolean).join(" · ")}
+        </p>
+        <dl className="mt-4 grid grid-cols-2 gap-2">
+          {[
+            ["Estágio", visit.stage || "—"],
+            ["Dias após plantio", dap !== null ? String(dap) : "—"],
+            ["Cultivar", season?.cultivar || "—"],
+            ["Safra", season?.label ?? "—"],
+          ].map(([label, value]) => (
+            <div key={label} className="min-w-0 rounded-xl bg-white/10 px-3 py-2 ring-1 ring-white/10 print:bg-transparent print:ring-border">
+              <dt className="truncate text-[11px] font-medium uppercase tracking-wider text-white/60 print:text-muted">{label}</dt>
+              <dd className="truncate font-semibold tabular-nums">{value}</dd>
+            </div>
+          ))}
+        </dl>
       </header>
 
       <div className="no-print grid grid-cols-3 gap-2">
@@ -153,18 +170,28 @@ function Visit() {
           </Card>
         ) : (
           <Card className="divide-y divide-border p-0">
-            {findings.map((f) => (
-              <div key={f.id} className="flex items-start justify-between gap-3 p-4">
-                <div>
-                  <p className="font-medium">{f.name}</p>
-                  {f.note ? <p className="mt-0.5 text-sm text-muted">{f.note}</p> : null}
+            {findings.map((f) => {
+              const k = FINDING_STYLE[f.kind];
+              return (
+                <div key={f.id} className="flex items-start gap-3 p-4">
+                  <span aria-hidden className={`grid size-10 shrink-0 place-items-center rounded-xl ${k.tone}`}>
+                    <k.icon className="size-5" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium">{f.name}</p>
+                    <p className="mt-0.5 text-sm text-muted">
+                      {KIND_LABEL[f.kind]}
+                      {f.note ? ` · ${f.note}` : ""}
+                    </p>
+                    {f.amount ? (
+                      <p className="mt-1.5">
+                        <Chip tone="muted">{f.amount}</Chip>
+                      </p>
+                    ) : null}
+                  </div>
                 </div>
-                <div className="text-right">
-                  <Chip tone="muted">{KIND_LABEL[f.kind]}</Chip>
-                  {f.amount ? <p className="mt-1 text-sm">{f.amount}</p> : null}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </Card>
         )}
       </section>

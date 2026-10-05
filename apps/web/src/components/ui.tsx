@@ -76,10 +76,15 @@ export function Card({
   children: ReactNode;
   className?: string;
 }) {
-  // Duas classes de padding no mesmo elemento: vence a que vem depois no CSS, não no className.
+  // Duas classes do mesmo tipo no mesmo elemento: vence a que vem depois no CSS, não no className.
+  // Por isso o padrão só entra quando quem usa não passou o seu.
   const padding = /(^|\s)p-[\d.[]/.test(className) ? "" : "p-4";
+  const bg = /(^|\s)bg-/.test(className) ? "" : "bg-surface";
+  const borderColor = /(^|\s)border-(?!dashed|dotted|solid|double|none|[xytrbl]\b|[xytrbl]-|\d)[a-z]/.test(className)
+    ? ""
+    : "border-border";
   return (
-    <div className={`rounded-2xl border border-border bg-surface shadow-[0_1px_2px_rgba(16,24,20,0.04)] ${padding} ${className}`}>
+    <div className={`rounded-2xl border ${borderColor} ${bg} shadow-[0_1px_2px_rgba(16,24,20,0.04)] ${padding} ${className}`}>
       {children}
     </div>
   );
