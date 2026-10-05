@@ -205,3 +205,61 @@ export function toKml(docName: string, shapes: ImportedShape[]): string {
 export function mapsLink([lng, lat]: LngLat): string {
   return `https://www.google.com/maps/search/?api=1&query=${lat.toFixed(6)},${lng.toFixed(6)}`;
 }
+
+/** Tamanho do ladrilho do mapa em pixels (padrão dos servidores de mapa). */
+export const TILE = 256;
+/** Mercator corta perto dos polos. */
+const MAX_LAT = 85.05112878;
+
+/** Ponto em pixels do "mundo" no zoom dado (o mesmo sistema dos ladrilhos de mapa). */
+export function toWorld([lng, lat]: LngLat, zoom: number): [number, number] {
+  const size = TILE * 2 ** zoom;
+  const s = Math.sin(rad(Math.max(-MAX_LAT, Math.min(MAX_LAT, lat))));
+  return [((lng + 180) / 360) * size, (0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI)) * size];
+}
+
+/** Inverso de `toWorld`. */
+export function fromWorld([x, y]: [number, number], zoom: number): LngLat {
+  const size = TILE * 2 ** zoom;
+  const n = Math.PI - (2 * Math.PI * y) / size;
+  return [(x / size) * 360 - 180, (Math.atan(Math.sinh(n)) * 180) / Math.PI];
+}
+
+/** Centro e zoom (inteiro, até `maxZoom`) para os contornos caberem num quadro de `width` × `height`. */
+export function fitView(rings: LngLat[][], width: number, height: number, maxZoom = 18): { center: LngLat; zoom: number } {
+  const all = rings.flat();
+  if (all.length === 0) return { center: [-50, -14], zoom: 4 };
+  const lngs = all.map((p) => p[0]);
+  const lats = all.map((p) => p[1]);
+  const ne: LngLat = [Math.max(...lngs), Math.max(...lats)];
+  const sw: LngLat = [Math.min(...lngs), Math.min(...lats)];
+  let zoom = maxZoom;
+  for (; zoom > 1; zoom--) {
+    const [x1, y1] = toWorld(sw, zoom);
+    const [x2, y2] = toWorld(ne, zoom);
+    if (x2 - x1 <= width * 0.8 && y1 - y2 <= height * 0.8) break;
+  }
+  const [x1, y1] = toWorld(sw, zoom);
+  const [x2, y2] = toWorld(ne, zoom);
+  return { center: fromWorld([(x1 + x2) / 2, (y1 + y2) / 2], zoom), zoom };
+}
+
+/** Segmentos AB e CD se cruzam (sem contar ponta encostando em ponta). */
+function crosses(a: LngLat, b: LngLat, c: LngLat, d: LngLat): boolean {
+  const side = (p: LngLat, q: LngLat, r: LngLat) => Math.sign((q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0]));
+  return side(a, b, c) * side(a, b, d) < 0 && side(c, d, a) * side(c, d, b) < 0;
+}
+
+/** O contorno tem linhas que se cruzam (desenho em "8"), o que estraga a área. */
+export function selfIntersects(ring: LngLat[]): boolean {
+  const pts = openRing(ring);
+  const n = pts.length;
+  if (n < 4) return false;
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 2; j < n; j++) {
+      if (i === 0 && j === n - 1) continue; // lados vizinhos pelo fechamento
+      if (crosses(pts[i], pts[(i + 1) % n], pts[j], pts[(j + 1) % n])) return true;
+    }
+  }
+  return false;
+}

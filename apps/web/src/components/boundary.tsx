@@ -2,9 +2,11 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
-import { Footprints, MapPinned, Navigation, Upload } from "lucide-react";
+import { useLiveQuery } from "dexie-react-hooks";
+import { Footprints, MapPinned, Navigation, Pointer, Upload } from "lucide-react";
+import { TapDrawer } from "@/components/tap-map";
 import { Button, Card, SectionTitle } from "@/components/ui";
-import { updatePlot, type Plot } from "@/lib/db";
+import { alive, db, updatePlot, type Plot } from "@/lib/db";
 import {
   addTrackPoint,
   center,
@@ -35,9 +37,16 @@ export function ShapePreview({ ring, className = "h-40" }: { ring: LngLat[]; cla
 const km = (m: number) => (m >= 1000 ? `${formatNumberBR(m / 1000, 2)} km` : `${formatNumberBR(m, 0)} m`);
 
 export function BoundaryCard({ plot }: { plot: Plot }) {
-  const [mode, setMode] = useState<"view" | "record" | "import">("view");
+  const [mode, setMode] = useState<"view" | "record" | "import" | "draw">("view");
   const [message, setMessage] = useState("");
   const ring = plot.boundary && plot.boundary.length >= 3 ? plot.boundary : null;
+  const neighbors = useLiveQuery(
+    async () =>
+      alive(await db.plots.where("farmId").equals(plot.farmId).toArray())
+        .filter((p) => p.id !== plot.id && (p.boundary?.length ?? 0) >= 3)
+        .map((p) => p.boundary as LngLat[]),
+    [plot.farmId, plot.id],
+  );
 
   async function save(next: LngLat[]) {
     await updatePlot(plot.id, { boundary: next });
@@ -52,6 +61,8 @@ export function BoundaryCard({ plot }: { plot: Plot }) {
   }
 
   if (mode === "record") return <Recorder onDone={save} onCancel={() => setMode("view")} />;
+  if (mode === "draw" && neighbors)
+    return <TapDrawer initial={ring ?? []} neighbors={neighbors} onDone={save} onCancel={() => setMode("view")} />;
   if (mode === "import") return <Importer plotName={plot.name} onPick={save} onCancel={() => setMode("view")} />;
 
   const area = ring ? polygonAreaHa(ring) : 0;
@@ -105,6 +116,9 @@ export function BoundaryCard({ plot }: { plot: Plot }) {
               </Link>
             </div>
             <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+              <button type="button" className="font-medium text-brand" onClick={() => setMode("draw")}>
+                Ajustar no mapa
+              </button>
               <button type="button" className="font-medium text-brand" onClick={() => setMode("record")}>
                 Refazer pelo GPS
               </button>
@@ -121,12 +135,15 @@ export function BoundaryCard({ plot }: { plot: Plot }) {
             <p className="text-sm text-muted">
               Com o contorno, o talhão aparece no mapa da fazenda, a área é conferida e dá para abrir a rota até ele.
             </p>
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              <Button onClick={() => setMode("record")}>
-                <Footprints className="size-4" /> Caminhar o contorno (GPS)
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+              <Button onClick={() => setMode("draw")}>
+                <Pointer className="size-4" /> Desenhar no mapa
+              </Button>
+              <Button variant="secondary" onClick={() => setMode("record")}>
+                <Footprints className="size-4" /> Caminhar (GPS)
               </Button>
               <Button variant="secondary" onClick={() => setMode("import")}>
-                <Upload className="size-4" /> Importar KML ou GeoJSON
+                <Upload className="size-4" /> Importar arquivo
               </Button>
             </div>
           </>
