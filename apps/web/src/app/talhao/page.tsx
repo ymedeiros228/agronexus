@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState, type FormEvent } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
-import { Button, Card, Chip, Empty, Field, LinkButton, PageTitle, SectionTitle, inputClass, rejectField } from "@/components/ui";
+import { Button, Card, Chip, Empty, Field, inputClass, LinkButton, PageSkeleton, PageTitle, rejectField, SectionTitle } from "@/components/ui";
 import { BoundaryCard } from "@/components/boundary";
 import { OperationRow } from "@/components/operation-row";
 import { KIND_LABEL } from "@/lib/catalog";
@@ -49,7 +49,7 @@ function Plot() {
     return { plot, farm, seasons: alive(seasons), visits: liveVisits, findings, operations: ops, uses, today: todayISO() };
   }, [id]);
 
-  if (!data) return null;
+  if (!data) return <PageSkeleton />;
   if (!data.plot) {
     return (
       <Empty

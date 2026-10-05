@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useLiveQuery } from "dexie-react-hooks";
 import { Download, Navigation } from "lucide-react";
 import { TONE, toneOf, type Tone } from "@/components/map-bits";
-import { Button, Card, Empty, LinkButton, PageTitle, SectionTitle } from "@/components/ui";
+import { Button, Card, Empty, LinkButton, PageSkeleton, PageTitle, SectionTitle } from "@/components/ui";
 import { alive, db } from "@/lib/db";
 import { fitFontSize, formatDate, plotLabel, plotShortName, todayISO } from "@/lib/format";
 import { center, mapsLink, polygonAreaHa, projectShapes, toKml, type LngLat } from "@/lib/geo";
@@ -58,7 +58,7 @@ function FarmMap() {
     return { farms: liveFarms, panel };
   });
 
-  if (!data) return null;
+  if (!data) return <PageSkeleton />;
   if (data.farms.length === 0) {
     return (
       <>

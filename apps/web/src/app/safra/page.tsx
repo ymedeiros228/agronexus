@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Suspense, useState, type ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useLiveQuery } from "dexie-react-hooks";
-import { Button, Card, Empty, LinkButton, SectionTitle } from "@/components/ui";
+import { Button, Card, Empty, LinkButton, PageSkeleton, SectionTitle } from "@/components/ui";
 import { KIND_LABEL } from "@/lib/catalog";
 import { EXPENSE_NAME } from "@/lib/finance";
 import { formatDate, todayISO } from "@/lib/format";
@@ -58,7 +58,7 @@ function Report() {
     return { input, today, labels: seasonLabels(input.seasons) };
   });
 
-  if (!data) return null;
+  if (!data) return <PageSkeleton />;
   if (!data.labels.includes(label)) {
     return (
       <Empty

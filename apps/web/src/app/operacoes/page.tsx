@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { useLiveQuery } from "dexie-react-hooks";
 import { Plus } from "lucide-react";
 import { OperationRow } from "@/components/operation-row";
-import { Card, Empty, LinkButton, PageTitle, SectionTitle } from "@/components/ui";
+import { Card, Empty, LinkButton, PageSkeleton, PageTitle, SectionTitle } from "@/components/ui";
 import { alive, db, type Operation } from "@/lib/db";
 import { todayISO } from "@/lib/format";
 import { isLate } from "@/lib/operations";
@@ -40,7 +40,7 @@ function Operations() {
     };
   });
 
-  if (!data) return null;
+  if (!data) return <PageSkeleton />;
   const { today } = data;
   const farmName = new Map(data.farms.map((f) => [f.id, f.name]));
   const plotName = new Map(data.plots.map((p) => [p.id, p.name]));

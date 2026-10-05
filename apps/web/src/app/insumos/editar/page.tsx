@@ -4,14 +4,14 @@ import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { useLiveQuery } from "dexie-react-hooks";
 import { SupplyForm } from "@/components/supply-form";
-import { Empty, LinkButton } from "@/components/ui";
+import { Empty, LinkButton, PageSkeleton } from "@/components/ui";
 import { db } from "@/lib/db";
 
 function EditSupply() {
   const id = useSearchParams().get("id") ?? "";
   const supply = useLiveQuery(async () => (await db.supplies.get(id)) ?? null, [id]);
 
-  if (supply === undefined) return null;
+  if (supply === undefined) return <PageSkeleton />;
   if (!supply || supply.deletedAt) {
     return (
       <Empty

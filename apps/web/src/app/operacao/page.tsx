@@ -4,7 +4,7 @@ import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { useLiveQuery } from "dexie-react-hooks";
 import { OperationForm } from "@/components/operation-form";
-import { Empty, LinkButton } from "@/components/ui";
+import { Empty, LinkButton, PageSkeleton } from "@/components/ui";
 import { alive, db } from "@/lib/db";
 import { operationInput } from "@/lib/operations";
 
@@ -21,7 +21,7 @@ function EditOperation() {
     return { op, uses };
   }, [id]);
 
-  if (data === undefined) return null;
+  if (data === undefined) return <PageSkeleton />;
   if (!data) {
     return (
       <Empty

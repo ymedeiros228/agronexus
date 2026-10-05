@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Suspense, useState, type FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useLiveQuery } from "dexie-react-hooks";
-import { Button, Card, Empty, Field, LinkButton, PageTitle, inputClass } from "@/components/ui";
+import { Button, Card, Empty, Field, inputClass, LinkButton, PageSkeleton, PageTitle } from "@/components/ui";
 import { alive, db, removeExpense, type Expense, type ExpenseCategory, type Farm } from "@/lib/db";
 import { FarmField, byFarmName } from "@/components/farm-field";
 import { EXPENSE_CATEGORIES, saveExpense } from "@/lib/finance";
@@ -21,7 +21,7 @@ function ExpenseEntry() {
     return { labels, farms, expense: expense && !expense.deletedAt ? expense : null };
   }, [id]);
 
-  if (!data) return null;
+  if (!data) return <PageSkeleton />;
   if (id && !data.expense) {
     return (
       <Empty

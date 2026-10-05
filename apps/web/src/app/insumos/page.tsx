@@ -5,7 +5,7 @@ import { useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { PackagePlus, Plus, Search } from "lucide-react";
 import { StockBadge, SupplyIcon, needsAttention } from "@/components/supply-bits";
-import { Card, Empty, LinkButton, PageTitle, inputClass } from "@/components/ui";
+import { Card, Empty, inputClass, LinkButton, PageSkeleton, PageTitle } from "@/components/ui";
 import { alive, db, type SupplyCategory } from "@/lib/db";
 import { formatDate } from "@/lib/format";
 import { formatBRL } from "@/lib/operations";
@@ -24,7 +24,7 @@ export default function SuppliesPage() {
     );
   });
 
-  if (!stock) return null;
+  if (!stock) return <PageSkeleton />;
 
   const attention = stock.filter(needsAttention);
   const priced = stock.filter((s) => s.value != null);

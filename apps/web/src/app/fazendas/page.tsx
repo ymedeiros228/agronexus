@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
-import { Button, Card, Empty, Field, PageTitle, inputClass } from "@/components/ui";
+import { Button, Card, Empty, Field, inputClass, PageSkeleton, PageTitle } from "@/components/ui";
 import { ChevronRight } from "lucide-react";
 import { ShapeThumb } from "@/components/map-bits";
 import { alive, db, newBase } from "@/lib/db";
@@ -32,7 +32,7 @@ export default function FarmsPage() {
     setOpen(false);
   }
 
-  if (!data) return null;
+  if (!data) return <PageSkeleton />;
 
   return (
     <>

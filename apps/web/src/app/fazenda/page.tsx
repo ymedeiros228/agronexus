@@ -7,7 +7,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { ChevronRight, CloudRain, X } from "lucide-react";
 import { ShapeThumb } from "@/components/map-bits";
 import { VisitRow } from "@/components/visit-row";
-import { Button, Card, Chip, Empty, Field, LinkButton, PageTitle, SectionTitle, inputClass, rejectField } from "@/components/ui";
+import { Button, Card, Chip, Empty, Field, inputClass, LinkButton, PageSkeleton, PageTitle, rejectField, SectionTitle } from "@/components/ui";
 import { alive, db, newBase, removeFarm, removeRainfall, updateFarm } from "@/lib/db";
 import { formatDate, plotLabel, todayISO } from "@/lib/format";
 import { formatNumberBR, parseNumberBR, seasonLabels } from "@/lib/operations";
@@ -101,7 +101,7 @@ function Farm() {
     router.push("/fazendas");
   }
 
-  if (!data) return null;
+  if (!data) return <PageSkeleton />;
   if (!data.farm) {
     return (
       <Empty

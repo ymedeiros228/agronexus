@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { BlobImg } from "@/components/blob-img";
-import { Button, Card, Chip, Empty, LinkButton, SectionTitle } from "@/components/ui";
+import { Button, Card, Chip, Empty, LinkButton, PageSkeleton, SectionTitle } from "@/components/ui";
 import { KIND_LABEL } from "@/lib/catalog";
 import { alive, db, removeVisit, setFollowUpDone } from "@/lib/db";
 import { formatDate } from "@/lib/format";
@@ -46,7 +46,7 @@ function Visit() {
     };
   }, [id]);
 
-  if (!data) return null;
+  if (!data) return <PageSkeleton />;
   if (!data.visit) {
     return (
       <Empty

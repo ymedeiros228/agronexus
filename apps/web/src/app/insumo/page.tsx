@@ -7,7 +7,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { ArrowDownToLine, ClipboardCheck, PackagePlus, Pencil, Scale } from "lucide-react";
 import { OperationIcon } from "@/components/operation-bits";
 import { StockBadge, SupplyIcon } from "@/components/supply-bits";
-import { Card, Empty, LinkButton, SectionTitle } from "@/components/ui";
+import { Card, Empty, LinkButton, PageSkeleton, SectionTitle } from "@/components/ui";
 import { alive, db, type Operation, type StockMove } from "@/lib/db";
 import { formatDate, plotLabel } from "@/lib/format";
 import { KIND_NAME, formatBRL, formatNumberBR } from "@/lib/operations";
@@ -36,7 +36,7 @@ function SupplyDetail() {
     };
   }, [id]);
 
-  if (data === undefined) return null;
+  if (data === undefined) return <PageSkeleton />;
   if (data === null) {
     return (
       <Empty

@@ -23,7 +23,7 @@ import { LoadDemoButton } from "@/components/demo-bits";
 import { MiniMap, hasShape } from "@/components/map-bits";
 import { OperationRow } from "@/components/operation-row";
 import { VisitRow } from "@/components/visit-row";
-import { Card, Chip, LinkButton, SectionTitle } from "@/components/ui";
+import { Card, Chip, LinkButton, PageSkeleton, SectionTitle } from "@/components/ui";
 import { LAST_BACKUP_KEY } from "@/lib/backup";
 import { alive, db, getMeta, type OperationKind } from "@/lib/db";
 import { formatDate, todayISO, plotLabel } from "@/lib/format";
@@ -158,7 +158,7 @@ export default function Home() {
     };
   });
 
-  if (!data) return null;
+  if (!data) return <PageSkeleton />;
 
   const { today, panel } = data;
   const farmName = new Map(data.farms.map((f) => [f.id, f.name]));

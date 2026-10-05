@@ -127,3 +127,29 @@ export function Chip({ children, tone = "brand" }: { children: ReactNode; tone?:
   };
   return <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${tones[tone]}`}>{children}</span>;
 }
+
+/**
+ * Esqueleto da tela enquanto o banco local responde. Só aparece depois de 150 ms,
+ * para não piscar quando a leitura é rápida.
+ */
+export function PageSkeleton({ rows = 4 }: { rows?: number }) {
+  return (
+    <div role="status" aria-label="Carregando" className="skeleton-in space-y-6">
+      <div className="space-y-2">
+        <div className="h-7 w-48 animate-pulse rounded-lg bg-border/70" />
+        <div className="h-4 w-64 max-w-full animate-pulse rounded-lg bg-border/50" />
+      </div>
+      <div className="space-y-3">
+        {Array.from({ length: rows }, (_, i) => (
+          <div key={i} className="flex gap-3 rounded-2xl border border-border bg-surface p-4">
+            <div className="size-12 shrink-0 animate-pulse rounded-xl bg-border/60" />
+            <div className="flex-1 space-y-2 pt-1">
+              <div className="h-4 w-2/3 animate-pulse rounded bg-border/70" />
+              <div className="h-3 w-1/2 animate-pulse rounded bg-border/50" />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}

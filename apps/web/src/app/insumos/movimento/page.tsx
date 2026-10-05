@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Suspense, useState, type FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useLiveQuery } from "dexie-react-hooks";
-import { Button, Card, Empty, Field, LinkButton, PageTitle, inputClass } from "@/components/ui";
+import { Button, Card, Empty, Field, inputClass, LinkButton, PageSkeleton, PageTitle } from "@/components/ui";
 import { alive, db, removeStockMove, type StockMove, type Supply } from "@/lib/db";
 import { formatDate, todayISO } from "@/lib/format";
 import { formatBRL, formatNumberBR, parseNumberBR } from "@/lib/operations";
@@ -19,7 +19,7 @@ function Movement() {
     return { supplies, move: move && !move.deletedAt ? move : null };
   }, [id]);
 
-  if (!data) return null;
+  if (!data) return <PageSkeleton />;
   if (id && !data.move) {
     return (
       <Empty

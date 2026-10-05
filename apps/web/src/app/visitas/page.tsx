@@ -5,7 +5,7 @@ import { useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { Bug, Leaf, Plus, Sprout, Microscope } from "lucide-react";
 import { VisitRow } from "@/components/visit-row";
-import { Card, Chip, Empty, LinkButton, PageTitle } from "@/components/ui";
+import { Card, Chip, Empty, LinkButton, PageSkeleton, PageTitle } from "@/components/ui";
 import { KIND_LABEL } from "@/lib/catalog";
 import { alive, db, type FindingKind } from "@/lib/db";
 import { formatDate, plotLabel } from "@/lib/format";
@@ -34,7 +34,7 @@ export default function MonitoringPage() {
     return { visits: alive(visits), findings: alive(findings), farms: alive(farms), plots: alive(plots) };
   });
 
-  if (!data) return null;
+  if (!data) return <PageSkeleton />;
   const farmName = new Map(data.farms.map((f) => [f.id, f.name]));
   const plotName = new Map(data.plots.map((p) => [p.id, p.name]));
   const visits = data.visits.filter((v) => farmName.has(v.farmId) && plotName.has(v.plotId));

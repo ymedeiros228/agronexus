@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Suspense, useState, type FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useLiveQuery } from "dexie-react-hooks";
-import { Button, Card, Empty, Field, LinkButton, PageTitle, inputClass } from "@/components/ui";
+import { Button, Card, Empty, Field, inputClass, LinkButton, PageSkeleton, PageTitle } from "@/components/ui";
 import { alive, db, removeSale, type Farm, type Sale } from "@/lib/db";
 import { FarmField, byFarmName } from "@/components/farm-field";
 import { saveSale } from "@/lib/finance";
@@ -21,7 +21,7 @@ function SaleEntry() {
     return { labels, farms, sale: sale && !sale.deletedAt ? sale : null };
   }, [id]);
 
-  if (!data) return null;
+  if (!data) return <PageSkeleton />;
   if (id && !data.sale) {
     return (
       <Empty

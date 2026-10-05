@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useLiveQuery } from "dexie-react-hooks";
 import { FileText } from "lucide-react";
-import { Card, Empty, LinkButton, PageTitle } from "@/components/ui";
+import { Card, Empty, LinkButton, PageSkeleton, PageTitle } from "@/components/ui";
 import { todayISO } from "@/lib/format";
 import { formatBRL, formatNumberBR, seasonLabels, seasonStats } from "@/lib/operations";
 import { seasonFinance } from "@/lib/finance";
@@ -12,7 +12,7 @@ import { latestSeason } from "@/lib/season";
 
 export default function SeasonsPage() {
   const data = useLiveQuery(async () => ({ input: await loadReportInput(), today: todayISO() }));
-  if (!data) return null;
+  if (!data) return <PageSkeleton />;
 
   const { input, today } = data;
   const labels = seasonLabels(input.seasons);

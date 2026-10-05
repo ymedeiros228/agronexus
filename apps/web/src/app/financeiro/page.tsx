@@ -5,7 +5,7 @@ import { Suspense, type ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useLiveQuery } from "dexie-react-hooks";
 import { HandCoins, Receipt } from "lucide-react";
-import { Card, Empty, LinkButton, PageTitle, SectionTitle } from "@/components/ui";
+import { Card, Empty, LinkButton, PageSkeleton, PageTitle, SectionTitle } from "@/components/ui";
 import { EXPENSE_NAME, seasonFinance } from "@/lib/finance";
 import { formatDate, todayISO } from "@/lib/format";
 import { KIND_NAME, formatBRL, formatNumberBR, seasonLabels, seasonStats } from "@/lib/operations";
@@ -18,7 +18,7 @@ function Finance() {
   const asked = params.get("safra") ?? "";
   const askedFarm = params.get("fazenda") ?? "";
   const data = useLiveQuery(async () => ({ input: await loadReportInput(), today: todayISO() }));
-  if (!data) return null;
+  if (!data) return <PageSkeleton />;
 
   const { input: all, today } = data;
   const labels = seasonLabels(all.seasons);

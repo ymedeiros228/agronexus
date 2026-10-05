@@ -3,7 +3,7 @@
 import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { useLiveQuery } from "dexie-react-hooks";
-import { Empty, LinkButton } from "@/components/ui";
+import { Empty, LinkButton, PageSkeleton } from "@/components/ui";
 import { VisitForm } from "@/components/visit-form";
 import { alive, db } from "@/lib/db";
 
@@ -24,7 +24,7 @@ function EditVisit() {
     };
   }, [id]);
 
-  if (!data) return null;
+  if (!data) return <PageSkeleton />;
   if (!data.visit) {
     return (
       <Empty
