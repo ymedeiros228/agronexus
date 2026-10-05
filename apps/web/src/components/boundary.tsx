@@ -16,6 +16,7 @@ import {
   type ImportedShape,
   type LngLat,
 } from "@/lib/geo";
+import { readShapeText } from "@/lib/kmz";
 import { formatNumberBR } from "@/lib/operations";
 
 /** Ponto com precisão pior que isso não entra no contorno automático. */
@@ -248,13 +249,16 @@ function Importer({ plotName, onPick, onCancel }: { plotName: string; onPick: (r
     const file = e.currentTarget.files?.[0];
     e.currentTarget.value = "";
     if (!file) return;
-    if (/\.kmz$/i.test(file.name)) {
-      setError("Arquivo .kmz é compactado. No Google Earth, salve como .kml e importe de novo.");
+    let found: ImportedShape[];
+    try {
+      found = parseShapes(await readShapeText(file));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Não foi possível ler o arquivo.");
+      setShapes([]);
       return;
     }
-    const found = parseShapes(await file.text());
     if (found.length === 0) {
-      setError("Não achei nenhum polígono nesse arquivo. Use KML ou GeoJSON com a área do talhão.");
+      setError("Não achei nenhum polígono nesse arquivo. Use KML, KMZ ou GeoJSON com a área do talhão.");
       setShapes([]);
       return;
     }
@@ -270,13 +274,13 @@ function Importer({ plotName, onPick, onCancel }: { plotName: string; onPick: (r
       <SectionTitle>Importar contorno</SectionTitle>
       <Card className="space-y-4">
         <p className="text-sm text-muted">
-          Arquivo .kml (Google Earth, CAR) ou .geojson com o desenho do talhão. Se tiver vários, escolha qual é este.
+          Arquivo .kml ou .kmz (Google Earth, CAR) ou .geojson com o desenho do talhão. Se tiver vários, escolha qual é este.
         </p>
         <label className="inline-flex min-h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-border bg-surface px-4 text-sm font-semibold">
           <Upload className="size-4" /> Escolher arquivo
           <input
             type="file"
-            accept=".kml,.geojson,.json,application/vnd.google-earth.kml+xml,application/geo+json,application/json"
+            accept=".kml,.kmz,.geojson,.json,application/vnd.google-earth.kml+xml,application/vnd.google-earth.kmz,application/geo+json,application/json"
             className="sr-only"
             onChange={read}
           />

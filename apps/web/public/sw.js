@@ -4,7 +4,7 @@
  * - Na instalação, baixa as páginas principais e seus arquivos para uso offline.
  * Os dados do usuário ficam no IndexedDB, não aqui.
  */
-const CACHE = "agronexus-v14";
+const CACHE = "agronexus-v15";
 const PAGES = [
   "/",
   "/fazendas",
