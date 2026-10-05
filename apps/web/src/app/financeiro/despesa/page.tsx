@@ -1,11 +1,11 @@
 "use client";
 
-import { toast } from "@/components/toaster";
 import Link from "next/link";
 import { Suspense, useState, type FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useLiveQuery } from "dexie-react-hooks";
 import { Button, Card, Empty, Field, inputClass, LinkButton, PageSkeleton, PageTitle } from "@/components/ui";
+import { toast } from "@/components/toaster";
 import { alive, db, removeExpense, type Expense, type ExpenseCategory, type Farm, restoreRemoved } from "@/lib/db";
 import { FarmField, byFarmName } from "@/components/farm-field";
 import { EXPENSE_CATEGORIES, saveExpense } from "@/lib/finance";

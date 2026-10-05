@@ -1,6 +1,5 @@
 "use client";
 
-import { toast } from "@/components/toaster";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
@@ -9,6 +8,8 @@ import { OperationIcon } from "@/components/operation-bits";
 import { SuppliesEditor, rowsFromUses, rowsToUses, validateRows, type SupplyRow } from "@/components/operation-supplies";
 import { PlotPickerFields, usePlotPicker } from "@/components/plot-picker";
 import { Button, Card, Empty, Field, LinkButton, PageTitle, inputClass } from "@/components/ui";
+import { DictationTextarea } from "@/components/dictation";
+import { toast } from "@/components/toaster";
 import { alive, db, removeOperation, type OperationKind, type OperationStatus, restoreRemoved } from "@/lib/db";
 import { todayISO } from "@/lib/format";
 import {
@@ -205,7 +206,7 @@ export function OperationForm({ id, initial, initialUses, defaultFarmId, default
         </div>
 
         <Field label="O que foi feito" hint={hint}>
-          <textarea rows={3} value={description} onChange={(e) => setDescription(e.target.value)} className={inputClass} />
+          <DictationTextarea rows={3} value={description} onValue={setDescription} />
         </Field>
 
         {kind === "colheita" ? (

@@ -1,6 +1,5 @@
 "use client";
 
-import { toast } from "@/components/toaster";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState, type FormEvent } from "react";
@@ -8,6 +7,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { Button, Card, Chip, Empty, Field, inputClass, LinkButton, PageSkeleton, PageTitle, rejectField, SectionTitle } from "@/components/ui";
 import { BoundaryCard } from "@/components/boundary";
 import { OperationRow } from "@/components/operation-row";
+import { toast } from "@/components/toaster";
 import { KIND_LABEL } from "@/lib/catalog";
 import { addSeason, alive, db, removePlot, updatePlot, updateSeason, type Finding, type Season, type Visit, restoreRemoved } from "@/lib/db";
 import { formatDate, todayISO, plotLabel } from "@/lib/format";

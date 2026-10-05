@@ -1,12 +1,12 @@
 "use client";
 
-import { toast } from "@/components/toaster";
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { Button, Card, Empty, Field, inputClass, PageSkeleton, PageTitle } from "@/components/ui";
 import { ChevronRight } from "lucide-react";
 import { ShapeThumb } from "@/components/map-bits";
+import { toast } from "@/components/toaster";
 import { alive, db, newBase } from "@/lib/db";
 import { formatNumberBR } from "@/lib/operations";
 

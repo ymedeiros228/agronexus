@@ -1,6 +1,5 @@
 "use client";
 
-import { toast } from "@/components/toaster";
 import Link from "next/link";
 import { useState, type ChangeEvent, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
@@ -8,6 +7,8 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { BlobImg } from "@/components/blob-img";
 import { PlotPickerFields, usePlotPicker } from "@/components/plot-picker";
 import { Button, Card, Empty, Field, LinkButton, PageTitle, SectionTitle, inputClass } from "@/components/ui";
+import { DictationTextarea } from "@/components/dictation";
+import { toast } from "@/components/toaster";
 import { DIAGNOSIS_OPTIONS, FINDING_PRESETS, KIND_LABEL, STAGES } from "@/lib/catalog";
 import { alive, db, type FindingKind } from "@/lib/db";
 import { compressImage, getPosition, todayISO } from "@/lib/format";
@@ -312,22 +313,10 @@ export function VisitForm({ visitId, initial, seasonId, defaultFarmId, defaultPl
 
       <Card className="space-y-4">
         <Field label="Observações">
-          <textarea
-            rows={3}
-            className={inputClass}
-            value={observations}
-            onChange={(e) => setObservations(e.target.value)}
-            placeholder="O que você viu no talhão"
-          />
+          <DictationTextarea rows={3} value={observations} onValue={setObservations} placeholder="O que você viu no talhão" />
         </Field>
         <Field label="Recomendação">
-          <textarea
-            rows={3}
-            className={inputClass}
-            value={recommendation}
-            onChange={(e) => setRecommendation(e.target.value)}
-            placeholder="O que precisa ser feito no talhão"
-          />
+          <DictationTextarea rows={3} value={recommendation} onValue={setRecommendation} placeholder="O que precisa ser feito no talhão" />
         </Field>
         <Field label="Retorno combinado" hint="Opcional. Aparece como pendência no início.">
           <input type="date" value={followUp} onChange={(e) => setFollowUp(e.target.value)} className={inputClass} />
