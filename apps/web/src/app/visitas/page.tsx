@@ -8,7 +8,7 @@ import { VisitRow } from "@/components/visit-row";
 import { Card, Chip, Empty, LinkButton, PageTitle } from "@/components/ui";
 import { KIND_LABEL } from "@/lib/catalog";
 import { alive, db, type FindingKind } from "@/lib/db";
-import { formatDate } from "@/lib/format";
+import { formatDate, plotLabel } from "@/lib/format";
 
 const KIND_ICON: Record<FindingKind, typeof Bug> = { praga: Bug, doenca: Microscope, daninha: Sprout, outro: Leaf };
 const KIND_TONE: Record<FindingKind, string> = {
@@ -105,7 +105,7 @@ export default function MonitoringPage() {
                   <p className="text-sm text-muted">Nenhuma ocorrência registrada com este filtro.</p>
                 </Card>
               ) : (
-                <div className="grid gap-3 lg:grid-cols-2">
+                <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
                   {occurrences.map(({ f, v }) => {
                     const Icon = KIND_ICON[f.kind];
                     return (
@@ -123,7 +123,7 @@ export default function MonitoringPage() {
                             <Chip tone="muted">{v.stage}</Chip>
                           </span>
                           <span className="block truncate text-sm text-muted">
-                            {farmName.get(v.farmId)} · Talhão {plotName.get(v.plotId)} · {formatDate(v.date)}
+                            {farmName.get(v.farmId)} · {plotLabel(plotName.get(v.plotId))} · {formatDate(v.date)}
                           </span>
                           {f.amount || f.note ? (
                             <span className="mt-1 block text-sm">{[f.amount, f.note].filter(Boolean).join(" — ")}</span>
@@ -136,7 +136,7 @@ export default function MonitoringPage() {
               )}
             </>
           ) : (
-            <div className="grid gap-3 lg:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
               {visits.map((v) => (
                 <VisitRow
                   key={v.id}

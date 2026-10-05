@@ -130,7 +130,7 @@ export default function SuppliesPage() {
           <p className="text-sm text-muted">Nenhum insumo com esse filtro.</p>
         </Card>
       ) : (
-        <ul className="grid gap-3 lg:grid-cols-2">
+        <ul className="grid grid-cols-1 gap-3 lg:grid-cols-2">
           {shown.map((s) => (
             <li key={s.supply.id}>
               <Link

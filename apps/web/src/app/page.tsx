@@ -3,17 +3,18 @@
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
-import { CircleDollarSign, LandPlot, Tractor, TrendingUp, type LucideIcon } from "lucide-react";
+import { ArrowRight, Bug, CircleDollarSign, LandPlot, MapPinned, Sprout, Tractor, TrendingUp, WifiOff, type LucideIcon } from "lucide-react";
 import { MiniMap, hasShape } from "@/components/map-bits";
 import { OperationRow } from "@/components/operation-row";
 import { VisitRow } from "@/components/visit-row";
-import { Card, Chip, Empty, LinkButton, PageTitle, SectionTitle } from "@/components/ui";
+import { Card, Chip, LinkButton, SectionTitle } from "@/components/ui";
 import { LAST_BACKUP_KEY } from "@/lib/backup";
 import { alive, db, getMeta, type OperationKind } from "@/lib/db";
-import { formatDate, todayISO } from "@/lib/format";
+import { formatDate, todayISO, plotLabel } from "@/lib/format";
 import { KIND_NAME, formatBRL, formatNumberBR, seasonLabels, seasonStats, yieldByPlot } from "@/lib/operations";
 import { NO_VISIT_ALERT_DAYS, buildPanel, type FarmStatus, type PlotStatus } from "@/lib/panel";
 import { seasonFinance } from "@/lib/finance";
+import { daysSince } from "@/lib/season";
 import { stockAlerts, stockOf, usesByOperation } from "@/lib/stock";
 
 /** Item do "Pede atenção": talhão (visita, retorno, operação) ou estoque. */
@@ -88,7 +89,7 @@ export default function Home() {
       ...panel.alerts.map((a) => ({
         key: `${a.kind}-${a.href}`,
         title: a.farmName,
-        sub: `Talhão ${a.plotName}`,
+        sub: plotLabel(a.plotName),
         text: a.text,
         href: a.href,
         danger: a.kind === "followup-overdue" || a.kind === "operation-late",
@@ -135,42 +136,48 @@ export default function Home() {
   const mapFarm = panel.farms.find((f) => f.plots.some(hasShape));
 
   if (data.farms.length === 0) {
-    return (
-      <>
-        <PageTitle title="Painel" subtitle="Como estão suas lavouras hoje." />
-        <Empty
-          title="Comece cadastrando uma fazenda"
-          text="Depois adicione os talhões. O painel mostra a situação de cada um, operações, custos e produtividade."
-          action={<LinkButton href="/fazendas">Cadastrar fazenda</LinkButton>}
-        />
-      </>
-    );
+    return <Welcome />;
   }
+
+  const pending = data.attention.length;
+  const visits7 = data.visits.filter((v) => daysSince(v.date) <= 7).length;
 
   return (
     <>
-      <PageTitle
-        title="Painel"
-        subtitle="Como estão suas lavouras hoje."
-        action={
-          labels.length > 0 ? (
+      <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#0f2b1c] via-[#14532f] to-[#1c6b41] p-5 text-white shadow-lg shadow-[#1c6b41]/20 sm:p-6">
+        <Sprout aria-hidden className="pointer-events-none absolute -bottom-10 -right-8 size-48 text-white/[0.07]" strokeWidth={1.4} />
+        <div className="relative flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-sm text-white/70">{todayLong()}</p>
+            <h1 className="mt-0.5 text-2xl font-semibold tracking-tight sm:text-3xl">{greeting()}</h1>
+          </div>
+          {labels.length > 0 ? (
             <label className="shrink-0">
               <span className="sr-only">Safra</span>
               <select
                 value={label}
                 onChange={(e) => setChosenLabel(e.target.value)}
-                className="min-h-10 rounded-xl border border-border bg-surface px-3 text-sm font-medium"
+                className="min-h-10 rounded-full bg-white/10 px-3.5 text-sm font-medium text-white ring-1 ring-white/25 backdrop-blur-sm"
               >
                 {labels.map((l) => (
-                  <option key={l} value={l}>
+                  <option key={l} value={l} className="text-foreground">
                     Safra {l}
                   </option>
                 ))}
               </select>
             </label>
-          ) : null
-        }
-      />
+          ) : null}
+        </div>
+        <p className="relative mt-3 flex items-center gap-2 text-sm font-medium">
+          <span aria-hidden className={`size-2 rounded-full ${pending ? "bg-amber-300" : "bg-accent"}`} />
+          {pending ? `${pending} ${pending === 1 ? "item pede" : "itens pedem"} atenção hoje` : "Tudo em dia nas lavouras"}
+        </p>
+        <dl className="relative mt-4 grid grid-cols-3 divide-x divide-white/15 rounded-2xl bg-white/10 py-3 text-center ring-1 ring-white/10">
+          <HeroStat label="Fazendas" value={data.farms.length} />
+          <HeroStat label="Talhões" value={data.plots.length} />
+          <HeroStat label="Visitas 7 dias" value={visits7} />
+        </dl>
+      </section>
 
       {data.unsaved > 0 ? (
         <Card className="flex flex-col gap-3 border-warn/40 bg-warn/5 sm:flex-row sm:items-center">
@@ -239,7 +246,7 @@ export default function Home() {
         </div>
       ) : null}
 
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
           {data.attention.length > 0 ? (
             <section className="space-y-3">
@@ -275,7 +282,7 @@ export default function Home() {
                   Ver todas
                 </Link>
               </div>
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {data.visits.slice(0, 4).map((v) => (
                   <VisitRow
                     key={v.id}
@@ -352,7 +359,7 @@ export default function Home() {
                   return (
                     <div key={y.plotId} className="space-y-1">
                       <div className="flex items-center justify-between text-sm">
-                        <span className="font-medium">Talhão {plotName.get(y.plotId) ?? "?"}</span>
+                        <span className="font-medium">{plotLabel(plotName.get(y.plotId))}</span>
                         <span>{formatNumberBR(y.perHa, 1)} sc/ha</span>
                       </div>
                       <div className="h-2 overflow-hidden rounded-full bg-border/60">
@@ -385,6 +392,82 @@ export default function Home() {
   );
 }
 
+const WELCOME_STEPS: { icon: LucideIcon; title: string; text: string }[] = [
+  { icon: MapPinned, title: "Fazendas e talhões", text: "Cadastre a área, a cultivar e o plantio. Desenhe o contorno pelo GPS ou importe do CAR." },
+  { icon: Bug, title: "Monitoramento", text: "Anote pragas, doenças e daninhas com foto, estágio e retorno combinado." },
+  { icon: Tractor, title: "Operações e custos", text: "Plantio, aplicações e colheita com insumos do estoque. Custo por hectare e por saca." },
+];
+
+/** Primeira tela, antes de existir qualquer fazenda. */
+function Welcome() {
+  return (
+    <>
+      <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#0f2b1c] via-[#14532f] to-[#1c6b41] p-6 text-white shadow-lg shadow-[#1c6b41]/20 sm:p-8">
+        <Sprout aria-hidden className="pointer-events-none absolute -bottom-12 -right-10 size-56 text-white/[0.07]" strokeWidth={1.4} />
+        <p className="relative text-sm text-white/70">{todayLong()}</p>
+        <h1 className="relative mt-1 text-3xl font-semibold tracking-tight sm:text-4xl">Bem-vindo ao AgroNexus</h1>
+        <p className="relative mt-3 max-w-md text-white/80">
+          O caderno da lavoura de soja: monitoramento, operações, estoque e resultado da safra, num só lugar.
+        </p>
+        <Link
+          href="/fazendas"
+          className="relative mt-6 inline-flex min-h-12 items-center gap-2 rounded-xl bg-white px-5 font-semibold text-[#14532f] shadow-sm transition active:scale-[0.98]"
+        >
+          Cadastrar a primeira fazenda <ArrowRight className="size-4" />
+        </Link>
+      </section>
+
+      <section className="space-y-3">
+        <SectionTitle>Como funciona</SectionTitle>
+        <ol className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          {WELCOME_STEPS.map((s, i) => (
+            <li key={s.title}>
+              <Card className="flex h-full gap-3">
+                <span aria-hidden className="grid size-11 shrink-0 place-items-center rounded-xl bg-brand-soft text-brand">
+                  <s.icon className="size-5" />
+                </span>
+                <span>
+                  <span className="block font-medium">
+                    <span className="text-muted">{i + 1}.</span> {s.title}
+                  </span>
+                  <span className="mt-0.5 block text-sm text-muted">{s.text}</span>
+                </span>
+              </Card>
+            </li>
+          ))}
+        </ol>
+      </section>
+
+      <Card className="flex items-start gap-3 bg-brand-soft/50">
+        <WifiOff aria-hidden className="mt-0.5 size-5 shrink-0 text-brand" />
+        <p className="text-sm">
+          <span className="font-medium">Funciona sem sinal no meio da lavoura.</span>{" "}
+          <span className="text-muted">Tudo fica salvo no aparelho. Faça backup em “Dados e backup”.</span>
+        </p>
+      </Card>
+    </>
+  );
+}
+
+function greeting(hour = new Date().getHours()): string {
+  return hour < 12 ? "Bom dia" : hour < 18 ? "Boa tarde" : "Boa noite";
+}
+
+/** "Sábado, 4 de outubro" */
+function todayLong(): string {
+  const s = new Date().toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long" });
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+function HeroStat({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="px-2">
+      <dt className="text-[11px] font-medium uppercase tracking-wider text-white/60">{label}</dt>
+      <dd className="mt-0.5 text-xl font-semibold tabular-nums">{value.toLocaleString("pt-BR")}</dd>
+    </div>
+  );
+}
+
 function Kpi({
   icon: Icon,
   label,
@@ -405,7 +488,7 @@ function Kpi({
       </span>
       <span className="min-w-0">
         <span className="block text-xs text-muted">{label}</span>
-        <span className="block text-xl font-semibold tracking-tight sm:text-2xl">{value}</span>
+        <span className="block text-xl font-semibold tabular-nums tracking-tight sm:text-2xl">{value}</span>
         <span className={`block text-xs ${warn ? "font-medium text-danger" : "text-muted"}`}>{sub}</span>
       </span>
     </Card>
@@ -469,7 +552,7 @@ function FarmBlock({ status }: { status: FarmStatus }) {
           </p>
         </Card>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {plots.map((p) => (
             <PlotCard key={p.plot.id} status={p} />
           ))}
@@ -482,7 +565,7 @@ function FarmBlock({ status }: { status: FarmStatus }) {
 function PlotCard({ status }: { status: PlotStatus }) {
   const { plot, season, lastVisit, daysSinceVisit, dap, lastFindings } = status;
   const late = daysSinceVisit !== null && daysSinceVisit > NO_VISIT_ALERT_DAYS && lastVisit?.stage !== "R8";
-  const details = [season?.cultivar, dap !== null ? `${dap} DAP` : null, plot.areaHa ? `${plot.areaHa} ha` : null]
+  const details = [season?.cultivar, dap !== null ? `${dap} DAP` : null, plot.areaHa ? `${formatNumberBR(plot.areaHa, 2)} ha` : null]
     .filter(Boolean)
     .join(" · ");
 
@@ -491,7 +574,7 @@ function PlotCard({ status }: { status: PlotStatus }) {
       <Card className="h-full transition hover:border-brand/40">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="font-medium">Talhão {plot.name}</p>
+            <p className="font-medium">{plotLabel(plot.name)}</p>
             {details ? <p className="mt-0.5 text-sm text-muted">{details}</p> : null}
           </div>
           {lastVisit ? <Chip>{lastVisit.stage}</Chip> : <Chip tone="muted">Sem visita</Chip>}

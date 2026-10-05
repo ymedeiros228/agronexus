@@ -8,7 +8,7 @@ import { Download, Navigation } from "lucide-react";
 import { TONE, toneOf, type Tone } from "@/components/map-bits";
 import { Button, Card, Empty, LinkButton, PageTitle, SectionTitle } from "@/components/ui";
 import { alive, db } from "@/lib/db";
-import { formatDate, todayISO } from "@/lib/format";
+import { fitFontSize, formatDate, plotLabel, plotShortName, todayISO } from "@/lib/format";
 import { center, mapsLink, polygonAreaHa, projectShapes, toKml, type LngLat } from "@/lib/geo";
 import { formatNumberBR } from "@/lib/operations";
 import { buildPanel, type Alert, type PlotStatus } from "@/lib/panel";
@@ -113,7 +113,7 @@ function FarmMap() {
                   setPicked(null);
                   router.replace(`/mapa?fazenda=${e.target.value}`);
                 }}
-                className="min-h-10 max-w-44 rounded-xl border border-border bg-surface px-3 text-sm font-medium"
+                className="min-h-10 max-w-64 rounded-xl border border-border bg-surface px-3 text-sm font-medium"
               >
                 {data.farms.map((f) => (
                   <option key={f.id} value={f.id}>
@@ -130,10 +130,10 @@ function FarmMap() {
         <Empty
           title="Nenhum talhão com contorno nesta fazenda"
           text="Abra um talhão e use “Caminhar o contorno (GPS)” ou importe um arquivo KML/GeoJSON (Google Earth, CAR)."
-          action={statuses[0] ? <LinkButton href={`/talhao?id=${statuses[0].plot.id}`}>Abrir talhão {statuses[0].plot.name}</LinkButton> : undefined}
+          action={statuses[0] ? <LinkButton href={`/talhao?id=${statuses[0].plot.id}`}>Abrir {plotLabel(statuses[0].plot.name)}</LinkButton> : undefined}
         />
       ) : (
-        <div className="grid gap-6 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           <div className="space-y-3 lg:col-span-2">
             <Card className="p-2">
               <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full" role="img" aria-label={`Mapa dos talhões da ${farm.name}`}>
@@ -152,7 +152,7 @@ function FarmMap() {
                       key={s.plot.id}
                       role="button"
                       tabIndex={0}
-                      aria-label={`Talhão ${s.plot.name}`}
+                      aria-label={plotLabel(s.plot.name)}
                       onClick={() => setPicked(s.plot.id)}
                       onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && setPicked(s.plot.id)}
                       className="cursor-pointer outline-none"
@@ -167,11 +167,12 @@ function FarmMap() {
                         x={shape.label[0]}
                         y={shape.label[1]}
                         textAnchor="middle"
-                        className="fill-foreground stroke-surface text-[24px] font-semibold"
+                        fontSize={fitFontSize(plotShortName(s.plot.name), shape.width, 24, 11)}
+                        className="fill-foreground stroke-surface font-semibold"
                         strokeWidth={4}
                         paintOrder="stroke"
                       >
-                        {s.plot.name}
+                        {plotShortName(s.plot.name)}
                       </text>
                       <text
                         x={shape.label[0]}
@@ -227,7 +228,7 @@ function FarmMap() {
                       className={`flex w-full items-center gap-3 p-3 text-left text-sm ${selected?.plot.id === s.plot.id ? "bg-brand-soft" : ""}`}
                     >
                       <span aria-hidden className={`size-2.5 shrink-0 rounded-full ${TONE[tone].dot}`} />
-                      <span className="min-w-0 flex-1 truncate font-medium">Talhão {s.plot.name}</span>
+                      <span className="min-w-0 flex-1 truncate font-medium">{plotLabel(s.plot.name)}</span>
                       <span className="shrink-0 text-muted">{formatNumberBR(polygonAreaHa(s.plot.boundary!), 1)} ha</span>
                     </button>
                   );
@@ -263,7 +264,7 @@ function PlotInfo({ status, alerts }: { status: PlotStatus; alerts: Alert[] }) {
   return (
     <Card className="space-y-3">
       <div>
-        <p className="text-lg font-semibold">Talhão {plot.name}</p>
+        <p className="text-lg font-semibold">{plotLabel(plot.name)}</p>
         <p className="text-sm text-muted">
           {[season ? `Safra ${season.label}` : "Sem safra", season?.cultivar, dap != null ? `${dap} DAP` : null].filter(Boolean).join(" · ")}
         </p>

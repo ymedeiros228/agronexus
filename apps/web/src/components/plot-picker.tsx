@@ -5,6 +5,7 @@ import { useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { Field, inputClass } from "@/components/ui";
 import { alive, db } from "@/lib/db";
+import { formatNumberBR } from "@/lib/operations";
 
 /** Escolha de fazenda e talhão. Se só existe uma opção, ela já vem escolhida. */
 export function usePlotPicker(initialFarmId = "", initialPlotId = "") {
@@ -67,7 +68,7 @@ export function PlotPickerFields({ picker }: { picker: PlotPicker }) {
           {farmPlots.map((p) => (
             <option key={p.id} value={p.id}>
               {p.name}
-              {p.areaHa ? ` · ${p.areaHa} ha` : ""}
+              {p.areaHa ? ` · ${formatNumberBR(p.areaHa, 2)} ha` : ""}
             </option>
           ))}
         </select>

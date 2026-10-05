@@ -9,7 +9,7 @@ import { OperationIcon } from "@/components/operation-bits";
 import { StockBadge, SupplyIcon } from "@/components/supply-bits";
 import { Card, Empty, LinkButton, SectionTitle } from "@/components/ui";
 import { alive, db, type Operation, type StockMove } from "@/lib/db";
-import { formatDate } from "@/lib/format";
+import { formatDate, plotLabel } from "@/lib/format";
 import { KIND_NAME, formatBRL, formatNumberBR } from "@/lib/operations";
 import { CATEGORY_NAME, formatQty, formatSignedQty, moveDate, stockOf } from "@/lib/stock";
 
@@ -121,7 +121,7 @@ function SupplyDetail() {
                 op={op}
                 date={date}
                 unit={unit}
-                place={op ? `Talhão ${data.plotName.get(op.plotId) ?? "?"} · ${data.farmName.get(op.farmId) ?? "Fazenda"}` : ""}
+                place={op ? `${plotLabel(data.plotName.get(op.plotId))} · ${data.farmName.get(op.farmId) ?? "Fazenda"}` : ""}
               />
             ))}
           </Card>

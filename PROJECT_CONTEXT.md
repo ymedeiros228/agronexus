@@ -6,7 +6,7 @@ Fase 1 em andamento. App web (PWA) em `apps/web`, local-first (dados no IndexedD
 Rodar localmente (a partir de `apps/web`):
 - Desenvolvimento: `npm run dev`
 - Produção (necessária para o service worker): `npm run build` e depois `npx next start -p 3100`
-- Conferência: `npx tsc --noEmit`, `npx eslint`, `npm test` (Vitest, 90 testes)
+- Conferência: `npx tsc --noEmit`, `npx eslint`, `npm test` (Vitest, 91 testes)
 
 ## Concluído
 - Repositório, docs, Plano Mestre, ADRs 0001 a 0007, roadmap por tela.
@@ -29,6 +29,7 @@ Rodar localmente (a partir de `apps/web`):
   - Restauração de backup ignora registro sem os campos obrigatórios e padroniza o rótulo da safra.
   - Backup é montado em partes (uma foto por vez) para não estourar o limite de texto do navegador. A restauração lê o arquivo em pedaços de 1 MB (`json-stream.ts`): tabelas numa transação, fotos em lotes de 20.
   - `sw.test.ts` falha se a lista `PAGES` de `public/sw.js` não bater com as páginas de `src/app`. Ao mudar arquivos pré-carregados, subir a versão `CACHE`.
+  - Visual: painel abre com faixa verde (saudação, data, safra, pendências); primeira tela é boas-vindas com os 3 passos. Nome do talhão via `plotLabel` (não repete "Talhão"); rótulos do mapa encolhem para caber no contorno. Grades sem colunas base usam `grid-cols-1` para não estourar a largura no celular.
 - Tipos, lint, testes e build passam. Todas as páginas são estáticas.
 
 ## Decisões arquiteturais

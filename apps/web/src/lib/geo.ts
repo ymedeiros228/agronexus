@@ -151,7 +151,8 @@ export function parseShapes(text: string): ImportedShape[] {
   return [];
 }
 
-export type Projected = { path: string; label: [number, number] };
+/** `width`: largura da forma no desenho, para o rótulo caber dentro dela. */
+export type Projected = { path: string; label: [number, number]; width: number };
 
 /**
  * Projeta vários contornos num quadro de `width` × `height` (SVG), mantendo a proporção.
@@ -180,7 +181,8 @@ export function projectShapes(rings: LngLat[][], width: number, height: number, 
   return rings.map((ring) => {
     const mapped = openRing(ring).map(map);
     const path = mapped.map(([x, y], i) => `${i ? "L" : "M"}${x.toFixed(1)} ${y.toFixed(1)}`).join(" ") + " Z";
-    return { path, label: map(center(ring)) };
+    const xs = mapped.map(([x]) => x);
+    return { path, label: map(center(ring)), width: Math.max(...xs) - Math.min(...xs) };
   });
 }
 

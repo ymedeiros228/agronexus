@@ -36,7 +36,7 @@ export default function SeasonsPage() {
   return (
     <>
       <PageTitle title="Safras" subtitle="Resumo de cada safra e relatório para imprimir ou mandar." />
-      <ul className="grid gap-3 lg:grid-cols-2">
+      <ul className="grid grid-cols-1 gap-3 lg:grid-cols-2">
         {labels.map((label) => {
           const s = seasonStats(label, input.seasons, input.plots, input.operations, today);
           const money = seasonFinance(label, s, input.sales, input.expenses);

@@ -8,7 +8,7 @@ import { VisitRow } from "@/components/visit-row";
 import { Button, Card, Chip, Empty, Field, LinkButton, PageTitle, SectionTitle, inputClass, rejectField } from "@/components/ui";
 import { alive, db, newBase, removeFarm, removeRainfall, updateFarm } from "@/lib/db";
 import { formatDate, todayISO } from "@/lib/format";
-import { parseNumberBR, seasonLabels } from "@/lib/operations";
+import { formatNumberBR, parseNumberBR, seasonLabels } from "@/lib/operations";
 import { SEASON_LABEL_PATTERN, daysSince, latestSeason, normalizeSeasonLabel, seasonLabelFor } from "@/lib/season";
 
 export default function FarmPage() {
@@ -222,7 +222,7 @@ function Farm() {
                           {plot.name} <span className="text-brand">›</span>
                         </p>
                         <p className="mt-0.5 text-sm text-muted">
-                          {plot.areaHa ? `${plot.areaHa} ha` : "Área não informada"}
+                          {plot.areaHa ? `${formatNumberBR(plot.areaHa, 2)} ha` : "Área não informada"}
                           {season?.cultivar ? ` · ${season.cultivar}` : ""}
                         </p>
                         {season?.plantingDate ? (

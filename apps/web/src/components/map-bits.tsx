@@ -1,5 +1,6 @@
 import type { LngLat } from "@/lib/geo";
 import { polygonAreaHa, projectShapes } from "@/lib/geo";
+import { fitFontSize, plotShortName } from "@/lib/format";
 import { formatNumberBR } from "@/lib/operations";
 import type { Alert, PlotStatus } from "@/lib/panel";
 
@@ -40,11 +41,12 @@ export function MiniMap({ statuses, alerts }: { statuses: PlotStatus[]; alerts: 
             x={shape.label[0]}
             y={shape.label[1] + 5}
             textAnchor="middle"
-            className="fill-foreground stroke-surface text-[16px] font-semibold"
+            fontSize={fitFontSize(plotShortName(drawn[i].plot.name), shape.width, 16)}
+            className="fill-foreground stroke-surface font-semibold"
             strokeWidth={4}
             paintOrder="stroke"
           >
-            {drawn[i].plot.name}
+            {plotShortName(drawn[i].plot.name)}
           </text>
         </g>
       ))}

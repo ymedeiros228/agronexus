@@ -165,7 +165,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <div className="px-2">
           <Logo dark />
         </div>
-        <div className="mt-6 grid gap-2">
+        <div className="mt-6 grid grid-cols-1 gap-2">
           {NEW_ACTIONS.map((a) => (
             <Link
               key={a.href}

@@ -10,6 +10,25 @@ export function formatDate(iso: string): string {
   return `${d}/${m}/${y}`;
 }
 
+/** "1 - Baixada" vira "Talhão 1 - Baixada"; nome que já começa com "Talhão" fica como está. */
+export function plotLabel(name: string | undefined): string {
+  if (!name) return "Talhão ?";
+  return /^talh[aã]o\b/i.test(name.trim()) ? name.trim() : `Talhão ${name.trim()}`;
+}
+
+/** Nome curto para rótulo no mapa: "Talhão 1 - Baixada" vira "1 - Baixada". */
+export function plotShortName(name: string): string {
+  return name.trim().replace(/^talh[aã]o\s+/i, "") || name.trim();
+}
+
+/**
+ * Tamanho da fonte para o texto caber em `width` (largura média de letra ~0,58 da fonte),
+ * entre `min` e `max`.
+ */
+export function fitFontSize(text: string, width: number, max: number, min = 9): number {
+  return Math.max(min, Math.min(max, (width * 0.9) / (text.length * 0.58)));
+}
+
 /** Reduz a foto no aparelho antes de guardar, para não encher a memória do celular. */
 export async function compressImage(file: File, maxSide = 1600, quality = 0.8): Promise<Blob> {
   const bitmap = await createImageBitmap(file);

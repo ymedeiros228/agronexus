@@ -9,7 +9,7 @@ import { BoundaryCard } from "@/components/boundary";
 import { OperationRow } from "@/components/operation-row";
 import { KIND_LABEL } from "@/lib/catalog";
 import { addSeason, alive, db, removePlot, updatePlot, updateSeason, type Finding, type Season, type Visit } from "@/lib/db";
-import { formatDate, todayISO } from "@/lib/format";
+import { formatDate, todayISO, plotLabel } from "@/lib/format";
 import { usesByOperation } from "@/lib/stock";
 import { formatBRL, formatNumberBR, isSpent, parseNumberBR, yieldByPlot } from "@/lib/operations";
 import { SEASON_LABEL_PATTERN, daysSince, latestSeason, nextSeasonLabel, normalizeSeasonLabel } from "@/lib/season";
@@ -114,8 +114,8 @@ function Plot() {
         </Link>
       </div>
       <PageTitle
-        title={`Talhão ${plot.name}`}
-        subtitle={[farm?.name, plot.areaHa ? `${plot.areaHa} ha` : null].filter(Boolean).join(" · ") || undefined}
+        title={plotLabel(plot.name)}
+        subtitle={[farm?.name, plot.areaHa ? `${formatNumberBR(plot.areaHa, 2)} ha` : null].filter(Boolean).join(" · ") || undefined}
         action={
           <Button variant="ghost" onClick={() => setPanel((p) => (p === "plot" ? null : "plot"))}>
             {panel === "plot" ? "Cancelar" : "Editar"}

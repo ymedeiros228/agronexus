@@ -199,7 +199,7 @@ function Report() {
 
       <Section title="Por talhão">
         <Card className="overflow-x-auto p-0">
-          <table className="w-full min-w-[640px] text-left text-sm">
+          <table className="w-full min-w-[640px] whitespace-nowrap text-left text-sm">
             <thead className="border-b border-border text-xs text-muted">
               <tr>
                 <Th>Talhão</Th>
@@ -235,7 +235,7 @@ function Report() {
         </Card>
       </Section>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {r.costByKind.length ? (
           <Section title="Custo realizado por tipo de operação">
             <Card className="space-y-3">

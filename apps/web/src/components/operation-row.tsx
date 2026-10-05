@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Check } from "lucide-react";
 import { OperationIcon, StatusPill } from "@/components/operation-bits";
 import type { Operation } from "@/lib/db";
-import { formatDate } from "@/lib/format";
+import { formatDate, plotLabel } from "@/lib/format";
 import { KIND_NAME, completeOperation, formatBRL, formatNumberBR, isLate } from "@/lib/operations";
 import { formatQty, type Use } from "@/lib/stock";
 
@@ -44,7 +44,7 @@ export function OperationRow({
       <OperationIcon kind={op.kind} />
       <Link href={`/operacao?id=${op.id}`} className="min-w-0 flex-1">
         <span className="block truncate font-medium">
-          {KIND_NAME[op.kind]} <span className="text-muted">· Talhão {plotName}</span>
+          {KIND_NAME[op.kind]} <span className="text-muted">· {plotLabel(plotName)}</span>
         </span>
         <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted">
           <StatusPill status={op.status} late={late} />

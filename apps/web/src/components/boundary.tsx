@@ -120,7 +120,7 @@ export function BoundaryCard({ plot }: { plot: Plot }) {
             <p className="text-sm text-muted">
               Com o contorno, o talhão aparece no mapa da fazenda, a área é conferida e dá para abrir a rota até ele.
             </p>
-            <div className="grid gap-2 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               <Button onClick={() => setMode("record")}>
                 <Footprints className="size-4" /> Caminhar o contorno (GPS)
               </Button>
