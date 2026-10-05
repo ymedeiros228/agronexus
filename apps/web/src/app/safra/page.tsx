@@ -7,7 +7,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { Button, Card, Empty, LinkButton, PageSkeleton, SectionTitle } from "@/components/ui";
 import { KIND_LABEL } from "@/lib/catalog";
 import { EXPENSE_NAME } from "@/lib/finance";
-import { formatDate, todayISO } from "@/lib/format";
+import { formatDate, plotLabel, todayISO } from "@/lib/format";
 import { KIND_NAME, formatBRL, formatNumberBR, seasonLabels } from "@/lib/operations";
 import { accountWide, farmsOfSeason, forFarm, seasonReport, type SeasonReport } from "@/lib/report";
 import { loadReportInput } from "@/lib/report-data";
@@ -196,6 +196,8 @@ function Report() {
           </Link>
         </Card>
       ) : null}
+
+      <YieldBars plots={r.plots} average={r.yieldPerHa} />
 
       <Section title="Por talhão">
         <Card className="overflow-x-auto p-0">
@@ -395,6 +397,51 @@ function Report() {
   );
 }
 
+/** Produtividade de cada talhão colhido, do maior para o menor, com a média da safra marcada. */
+function YieldBars({ plots, average }: { plots: SeasonReport["plots"]; average: number | null }) {
+  const rows = plots.filter((p) => p.yieldPerHa != null).sort((a, b) => b.yieldPerHa! - a.yieldPerHa!);
+  if (rows.length < 2) return null;
+  const max = rows[0].yieldPerHa! * 1.05;
+  return (
+    <Section title="Produtividade por talhão">
+      <Card className="space-y-3">
+        {rows.map((p) => {
+          const above = average != null && p.yieldPerHa! >= average;
+          return (
+            <div key={p.plotId} className="space-y-1">
+              <div className="flex items-baseline justify-between gap-3 text-sm">
+                <span className="min-w-0 truncate">
+                  <span className="font-medium">{plotLabel(p.plotName)}</span>
+                  {p.cultivar ? <span className="text-muted"> · {p.cultivar}</span> : null}
+                </span>
+                <span className="shrink-0 font-semibold tabular-nums">{sc(p.yieldPerHa)}</span>
+              </div>
+              <div className="relative h-2.5 rounded-full bg-border/60">
+                <div
+                  className={`h-full rounded-full ${above ? "bg-brand" : "bg-accent/70"}`}
+                  style={{ width: `${(p.yieldPerHa! / max) * 100}%` }}
+                />
+                {average != null ? (
+                  <span
+                    aria-hidden
+                    className="absolute -inset-y-1 w-0.5 rounded bg-foreground/50"
+                    style={{ left: `${(average / max) * 100}%` }}
+                  />
+                ) : null}
+              </div>
+            </div>
+          );
+        })}
+        {average != null ? (
+          <p className="flex items-center gap-2 pt-1 text-xs text-muted">
+            <span aria-hidden className="inline-block h-3 w-0.5 rounded bg-foreground/50" /> Média da safra: {sc(average)}
+          </p>
+        ) : null}
+      </Card>
+    </Section>
+  );
+}
+
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="space-y-3 break-inside-avoid">
@@ -417,7 +464,7 @@ function Stat({ label, value, sub }: { label: string; value: string; sub: string
   return (
     <Card className="p-3.5 sm:p-4">
       <span className="block text-xs text-muted">{label}</span>
-      <span className="block text-xl font-semibold tracking-tight">{value}</span>
+      <span className="block text-xl font-semibold tracking-tight tabular-nums">{value}</span>
       <span className="block text-xs text-muted">{sub}</span>
     </Card>
   );
