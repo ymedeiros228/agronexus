@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { Bug, CircleHelp, ClipboardList, Microscope, Sprout, type LucideIcon } from "lucide-react";
-import { BlobImg } from "@/components/blob-img";
+import { PhotoGallery } from "@/components/photo-viewer";
 import { Button, Card, Chip, Empty, LinkButton, PageSkeleton, SectionTitle } from "@/components/ui";
 import { toast } from "@/components/toaster";
 import { KIND_LABEL } from "@/lib/catalog";
@@ -199,14 +199,7 @@ function Visit() {
       {photos.length > 0 ? (
         <section className="space-y-3">
           <SectionTitle>Fotos</SectionTitle>
-          <div className="grid grid-cols-2 gap-3">
-            {photos.map((p) => (
-              <figure key={p.id} className="space-y-1.5">
-                <BlobImg blob={p.blob} alt={p.label || "Foto da visita"} className="aspect-square w-full rounded-xl" />
-                <figcaption className="text-xs text-muted">{p.label || "Diagnóstico não definido"}</figcaption>
-              </figure>
-            ))}
-          </div>
+          <PhotoGallery photos={photos} />
         </section>
       ) : null}
 
