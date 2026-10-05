@@ -111,6 +111,7 @@ function EntryForm({ supplies, initialSupplyId, move }: { supplies: Supply[]; in
     setSaving(true);
     try {
       await saveEntry({ supplyId, date, qty: qtyN, cost: costN, note }, move?.id);
+      toast(move ? "Entrada atualizada." : "Entrada lançada no estoque.");
       router.push(`/insumo?id=${supplyId}`);
     } catch (err) {
       setSaving(false);
@@ -206,6 +207,7 @@ function CountForm({ supplies, initialSupplyId }: { supplies: Supply[]; initialS
     setError("");
     setSaving(true);
     await saveCount(supplyId, countedN, stock.balance, date, note);
+    toast("Contagem registrada.");
     router.push(`/insumo?id=${supplyId}`);
   }
 

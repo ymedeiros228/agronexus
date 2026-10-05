@@ -80,6 +80,7 @@ function Plot() {
     if (!name) return;
     await updatePlot(id, { name, areaHa: parseNumberBR(String(f.get("area") ?? "")) });
     setPanel(null);
+    toast("Talhão atualizado.");
   }
 
   async function saveSeason(e: FormEvent<HTMLFormElement>) {
@@ -95,6 +96,7 @@ function Plot() {
     if (panel === "new-season") await addSeason(id, values);
     else if (current) await updateSeason(current.id, values);
     setPanel(null);
+    toast(panel === "new-season" ? `Safra ${label} aberta.` : "Safra atualizada.");
   }
 
   async function remove() {

@@ -29,6 +29,7 @@ export function SupplyForm({ id, initial }: { id?: string; initial?: SupplyInput
     setSaving(true);
     try {
       const savedId = await saveSupply({ name, category, unit, minQty: parseNumberBR(minQty), notes }, id);
+      toast(id ? "Insumo atualizado." : "Insumo cadastrado.");
       router.push(`/insumo?id=${savedId}`);
     } catch (err) {
       setSaving(false);

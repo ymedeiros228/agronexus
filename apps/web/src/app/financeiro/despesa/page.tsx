@@ -89,6 +89,7 @@ function ExpenseForm({
     setSaving(true);
     try {
       await saveExpense({ seasonLabel, date, category, description, amount: value, farmId }, expense?.id);
+      toast(expense ? "Despesa atualizada." : "Despesa lançada.");
       router.push(back);
     } catch (err) {
       setSaving(false);

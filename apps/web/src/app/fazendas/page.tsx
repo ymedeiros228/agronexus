@@ -1,5 +1,6 @@
 "use client";
 
+import { toast } from "@/components/toaster";
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
@@ -30,6 +31,7 @@ export default function FarmsPage() {
     });
     form.reset();
     setOpen(false);
+    toast(`${name} cadastrada.`);
   }
 
   if (!data) return <PageSkeleton />;

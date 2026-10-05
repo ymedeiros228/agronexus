@@ -1,5 +1,6 @@
 "use client";
 
+import { toast } from "@/components/toaster";
 import Link from "next/link";
 import { useState, type ChangeEvent, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
@@ -128,6 +129,7 @@ export function VisitForm({ visitId, initial, seasonId, defaultFarmId, defaultPl
       setError("Não foi possível salvar. Verifique o espaço do aparelho e tente de novo.");
       return;
     }
+    toast(visitId ? "Visita atualizada." : "Visita salva.");
     router.push(`/visita?id=${id}`);
   }
 

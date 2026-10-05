@@ -88,6 +88,7 @@ function SaleForm({
     setSaving(true);
     try {
       await saveSale({ seasonLabel, date, bags: bagsN, pricePerBag: priceN, buyer, note, farmId }, sale?.id);
+      toast(sale ? "Venda atualizada." : "Venda lançada.");
       router.push(back);
     } catch (err) {
       setSaving(false);

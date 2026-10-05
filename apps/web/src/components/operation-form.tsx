@@ -98,6 +98,7 @@ export function OperationForm({ id, initial, initialUses, defaultFarmId, default
     try {
       const uses = await rowsToUses(rows, areaHa);
       const savedId = await saveOperation(input, today, id, uses);
+      toast(id ? "Operação atualizada." : "Operação registrada.");
       router.push(`/operacoes?destaque=${savedId}`);
     } catch {
       setSaving(false);

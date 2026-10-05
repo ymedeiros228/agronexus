@@ -68,6 +68,7 @@ function Farm() {
     });
     form.reset();
     setPlotOpen(false);
+    toast(`${plotLabel(name)} cadastrado.`);
   }
 
   async function addRain(e: FormEvent<HTMLFormElement>) {
@@ -78,6 +79,7 @@ function Farm() {
     if (mm == null) return;
     await db.rainfall.add({ ...newBase(), farmId: id, date: String(f.get("date")), mm });
     form.reset();
+    toast(`Chuva de ${formatNumberBR(mm, 1)} mm anotada.`);
   }
 
   async function saveFarm(e: FormEvent<HTMLFormElement>) {
@@ -91,6 +93,7 @@ function Farm() {
       owner: String(f.get("owner") ?? "").trim(),
     });
     setEditOpen(false);
+    toast("Fazenda atualizada.");
   }
 
   async function remove() {
