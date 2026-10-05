@@ -6,7 +6,7 @@ Fase 1 em andamento. App web (PWA) em `apps/web`, local-first (dados no IndexedD
 Rodar localmente (a partir de `apps/web`):
 - Desenvolvimento: `npm run dev`
 - Produção (necessária para o service worker): `npm run build` e depois `npx next start -p 3100`
-- Conferência: `npx tsc --noEmit`, `npx eslint`, `npm test` (Vitest, 70 testes)
+- Conferência: `npx tsc --noEmit`, `npx eslint`, `npm test` (Vitest, 90 testes)
 
 ## Concluído
 - Repositório, docs, Plano Mestre, ADRs 0001 a 0007, roadmap por tela.
@@ -22,7 +22,13 @@ Rodar localmente (a partir de `apps/web`):
   - **Financeiro da safra**: vendas (sacas, preço líquido, comprador), despesas gerais por categoria, receita, custo total (operações + despesas), margem e margem/ha, ponto de equilíbrio (sc/ha ao preço médio e R$/sc com a produtividade), grão produzido/vendido/a vender, composição do custo. Entra no painel (custo/ha), no relatório e na comparação entre safras.
   - **Mapa de talhões** (sem satélite, funciona offline): contorno caminhando com GPS (filtra precisão pior que 25 m e pontos a menos de 5 m; tela fica ligada onde o navegador deixa) ou importado de KML/GeoJSON; área e perímetro pelo contorno, botão para usar como área do talhão; mapa da fazenda colorido pela situação; rota até o talhão (abre o app de mapas); exportação KML.
   - **Dados**: backup JSON de todas as tabelas (lista única em `backup.ts`), restauração que só mescla, lembrete de backup no painel, planilhas CSV (visitas, operações com insumos, estoque, vendas e despesas), armazenamento persistente.
-  - Banco local na versão 5 (v2: safra na visita, tabela meta; v3: operações; v4: insumos e movimentos de estoque; v5: vendas e despesas). Migrações verificadas no navegador com dados de teste.
+  - Banco local na versão 6 (v2: safra na visita, tabela meta; v3: operações; v4: insumos e movimentos de estoque; v5: vendas e despesas; v6: rótulo da safra padronizado). Migrações até a v5 verificadas no navegador com dados de teste; a v6 só nos testes.
+  - Rótulo da safra sempre no formato `2026/27` (aceita digitar `2026/2027`, `26/27`, `2026-27`), para vendas e despesas não se dividirem em safras diferentes.
+  - Áreas e chuva digitadas seguem o padrão brasileiro (`parseNumberBR`).
+  - Exclusão em cascata completa: visita leva achados e fotos; talhão leva safras, visitas e operações; fazenda leva tudo.
+  - Restauração de backup ignora registro sem os campos obrigatórios e padroniza o rótulo da safra.
+  - Backup é montado em partes (uma foto por vez) para não estourar o limite de texto do navegador. A restauração lê o arquivo em pedaços de 1 MB (`json-stream.ts`): tabelas numa transação, fotos em lotes de 20.
+  - `sw.test.ts` falha se a lista `PAGES` de `public/sw.js` não bater com as páginas de `src/app`. Ao mudar arquivos pré-carregados, subir a versão `CACHE`.
 - Tipos, lint, testes e build passam. Todas as páginas são estáticas.
 
 ## Decisões arquiteturais

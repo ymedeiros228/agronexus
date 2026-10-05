@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { daysSince, latestSeason, nextSeasonLabel, seasonLabelFor } from "./season";
+import { SEASON_LABEL_PATTERN, daysSince, latestSeason, nextSeasonLabel, normalizeSeasonLabel, seasonLabelFor } from "./season";
 
 describe("seasonLabelFor", () => {
   it("vira o ano agrícola em julho", () => {
@@ -38,5 +38,22 @@ describe("daysSince", () => {
     expect(daysSince("2026-10-01", noon("2026-10-01"))).toBe(0);
     expect(daysSince("2026-09-01", noon("2026-10-01"))).toBe(30);
     expect(daysSince("2026-10-05", noon("2026-10-01"))).toBe(0);
+  });
+});
+
+describe("normalizeSeasonLabel", () => {
+  it("padroniza os jeitos comuns de escrever a safra", () => {
+    for (const t of ["2026/27", "2026/2027", "26/27", "2026-27", " 2026 / 27 "]) expect(normalizeSeasonLabel(t)).toBe("2026/27");
+    expect(normalizeSeasonLabel("2099/2100")).toBe("2099/00");
+  });
+
+  it("recusa o que não é par de anos seguidos", () => {
+    for (const t of ["", "2026", "2026/28", "2026/25", "safra 26", "202/27"]) expect(normalizeSeasonLabel(t)).toBeNull();
+  });
+
+  it("o padrão do campo aceita o que a função aceita", () => {
+    const re = new RegExp(`^(?:${SEASON_LABEL_PATTERN})$`, "v");
+    for (const t of ["2026/27", "2026/2027", "26/27", "2026-27"]) expect(re.test(t)).toBe(true);
+    expect(re.test("safra 26")).toBe(false);
   });
 });

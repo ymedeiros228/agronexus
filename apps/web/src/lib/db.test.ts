@@ -18,6 +18,7 @@ describe("migração v1 → v2", () => {
       { id: "s-old", plotId: "p1", label: "2025/26", createdAt: 1, updatedAt: 1 },
       { id: "s-new", plotId: "p1", label: "2026/27", createdAt: 2, updatedAt: 2 },
       { id: "s-gone", plotId: "p1", label: "errada", createdAt: 3, updatedAt: 3, deletedAt: 3 },
+      { id: "s-long", plotId: "p2", label: "2024/2025", createdAt: 1, updatedAt: 1 },
     ]);
     await old.table("visits").bulkAdd([
       { id: "v1", plotId: "p1", farmId: "f1", date: "2026-10-01", createdAt: 5, updatedAt: 5 },
@@ -31,5 +32,11 @@ describe("migração v1 → v2", () => {
     expect(v1?.updatedAt).toBe(5);
     expect((await db.visits.get("v2"))?.seasonId).toBeNull();
     expect(await db.visits.where("seasonId").equals("s-new").count()).toBe(1);
+
+    // v6: rótulo padronizado; o que não é par de anos fica como estava.
+    const long = await db.seasons.get("s-long");
+    expect(long?.label).toBe("2024/25");
+    expect(long?.updatedAt).toBe(1);
+    expect((await db.seasons.get("s-gone"))?.label).toBe("errada");
   });
 });

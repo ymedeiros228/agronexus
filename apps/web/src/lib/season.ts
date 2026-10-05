@@ -4,6 +4,22 @@ export function seasonLabelFor(date: Date = new Date()): string {
   return `${start}/${String(start + 1).slice(2)}`;
 }
 
+/** O que o campo "Safra" aceita: "2026/27", "2026/2027", "26/27", "2026-27". */
+export const SEASON_LABEL_PATTERN = String.raw`\s*\d{2}(\d{2})?\s*(/|-)\s*\d{2}(\d{2})?\s*`;
+
+/**
+ * Padroniza o rótulo da safra para "2026/27", para "2026/2027" e "26/27" não virarem safras diferentes.
+ * Devolve null se não for um par de anos seguidos.
+ */
+export function normalizeSeasonLabel(text: string): string | null {
+  const m = /^(\d{2}|\d{4})\s*[/-]\s*(\d{2}|\d{4})$/.exec(text.trim());
+  if (!m) return null;
+  const start = m[1].length === 2 ? 2000 + Number(m[1]) : Number(m[1]);
+  const end = String(start + 1);
+  if (m[2] !== end && m[2] !== end.slice(2)) return null;
+  return `${start}/${end.slice(2)}`;
+}
+
 /** "2026/27" vira "2027/28". Rótulo fora do padrão volta a safra atual. */
 export function nextSeasonLabel(label: string): string {
   const m = /^(\d{4})\/\d{2}$/.exec(label.trim());

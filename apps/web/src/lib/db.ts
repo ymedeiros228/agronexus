@@ -1,5 +1,6 @@
 import Dexie, { type EntityTable } from "dexie";
 import type { LngLat } from "./geo";
+import { normalizeSeasonLabel } from "./season";
 
 /**
  * Armazenamento local-first (ADR 0004).
@@ -228,6 +229,19 @@ class AgroDB extends Dexie {
       sales: "id, seasonLabel, date, updatedAt",
       expenses: "id, seasonLabel, date, updatedAt",
     });
+    // v6: rótulo da safra padronizado ("2026/2027" e "26/27" viram "2026/27").
+    // Rótulo que não é par de anos fica como está. updatedAt não muda.
+    this.version(6)
+      .stores({})
+      .upgrade(async (tx) => {
+        const fix = (field: "label" | "seasonLabel") => (r: Record<string, unknown>) => {
+          const label = normalizeSeasonLabel(String(r[field] ?? ""));
+          if (label) r[field] = label;
+        };
+        await tx.table("seasons").toCollection().modify(fix("label"));
+        await tx.table("sales").toCollection().modify(fix("seasonLabel"));
+        await tx.table("expenses").toCollection().modify(fix("seasonLabel"));
+      });
   }
 }
 
@@ -251,8 +265,19 @@ export function removeRainfall(id: string) {
   return db.rainfall.update(id, gone());
 }
 
-export function removeVisit(id: string) {
-  return db.visits.update(id, gone());
+/** Achados e fotos das visitas removidas também saem (dentro de uma transação que inclua findings e photos). */
+async function removeVisitChildren(visitIds: string[], mark: ReturnType<typeof gone>) {
+  if (visitIds.length === 0) return;
+  await db.findings.where("visitId").anyOf(visitIds).filter((r) => !r.deletedAt).modify(mark);
+  await db.photos.where("visitId").anyOf(visitIds).filter((r) => !r.deletedAt).modify(mark);
+}
+
+export async function removeVisit(id: string) {
+  const mark = gone();
+  await db.transaction("rw", [db.visits, db.findings, db.photos], async () => {
+    await db.visits.update(id, mark);
+    await removeVisitChildren([id], mark);
+  });
 }
 
 export function setFollowUpDone(id: string, done: boolean) {
@@ -281,30 +306,42 @@ async function removeUses(operationIds: string[], mark: ReturnType<typeof gone>)
   await db.stockMoves.where("operationId").anyOf(operationIds).filter((m) => !m.deletedAt).modify(mark);
 }
 
-/** Remove o talhão com visitas e operações (exclusão lógica). */
-export async function removePlot(id: string) {
-  const mark = gone();
-  await db.transaction("rw", [db.plots, db.visits, db.operations, db.stockMoves], async () => {
-    await db.plots.update(id, mark);
-    await db.visits.where("plotId").equals(id).filter((v) => !v.deletedAt).modify(mark);
-    const ops = await db.operations.where("plotId").equals(id).filter((r) => !r.deletedAt).primaryKeys();
-    await db.operations.where("id").anyOf(ops).modify(mark);
-    await removeUses(ops, mark);
-  });
+const PLOT_TABLES = () => [db.plots, db.seasons, db.visits, db.findings, db.photos, db.operations, db.stockMoves];
+
+/** Talhões com safras, visitas (achados e fotos), operações e uso de insumo delas. Dentro de uma transação. */
+async function removePlotsCascade(plotIds: string[], mark: ReturnType<typeof gone>) {
+  if (plotIds.length === 0) return;
+  await db.plots.where("id").anyOf(plotIds).filter((r) => !r.deletedAt).modify(mark);
+  await db.seasons.where("plotId").anyOf(plotIds).filter((r) => !r.deletedAt).modify(mark);
+  const visits = await db.visits.where("plotId").anyOf(plotIds).filter((r) => !r.deletedAt).primaryKeys();
+  await db.visits.where("id").anyOf(visits).modify(mark);
+  await removeVisitChildren(visits, mark);
+  const ops = await db.operations.where("plotId").anyOf(plotIds).filter((r) => !r.deletedAt).primaryKeys();
+  await db.operations.where("id").anyOf(ops).modify(mark);
+  await removeUses(ops, mark);
 }
 
-/** Remove a fazenda com talhões, visitas, operações e chuvas (exclusão lógica). */
+/** Remove o talhão com safras, visitas e operações (exclusão lógica). */
+export async function removePlot(id: string) {
+  const mark = gone();
+  await db.transaction("rw", PLOT_TABLES(), () => removePlotsCascade([id], mark));
+}
+
+/** Remove a fazenda com talhões (e tudo deles), chuvas, vendas e despesas (exclusão lógica). */
 export async function removeFarm(id: string) {
   const mark = gone();
-  const tables = [db.farms, db.plots, db.visits, db.rainfall, db.operations, db.stockMoves, db.sales, db.expenses];
+  const tables = [db.farms, db.rainfall, db.sales, db.expenses, ...PLOT_TABLES()];
   await db.transaction("rw", tables, async () => {
     await db.farms.update(id, mark);
-    await db.plots.where("farmId").equals(id).filter((r) => !r.deletedAt).modify(mark);
-    await db.visits.where("farmId").equals(id).filter((r) => !r.deletedAt).modify(mark);
-    await db.rainfall.where("farmId").equals(id).filter((r) => !r.deletedAt).modify(mark);
+    await removePlotsCascade(await db.plots.where("farmId").equals(id).primaryKeys(), mark);
+    // Visitas e operações também têm farmId; pega as que estejam num talhão já removido antes.
+    const visits = await db.visits.where("farmId").equals(id).filter((r) => !r.deletedAt).primaryKeys();
+    await db.visits.where("id").anyOf(visits).modify(mark);
+    await removeVisitChildren(visits, mark);
     const ops = await db.operations.where("farmId").equals(id).filter((r) => !r.deletedAt).primaryKeys();
     await db.operations.where("id").anyOf(ops).modify(mark);
     await removeUses(ops, mark);
+    await db.rainfall.where("farmId").equals(id).filter((r) => !r.deletedAt).modify(mark);
     // Vendas e despesas não têm índice de fazenda; são poucas, filtra na memória.
     await db.sales.filter((r) => r.farmId === id && !r.deletedAt).modify(mark);
     await db.expenses.filter((r) => r.farmId === id && !r.deletedAt).modify(mark);

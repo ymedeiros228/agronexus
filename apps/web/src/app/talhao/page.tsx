@@ -4,15 +4,15 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState, type FormEvent } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
-import { Button, Card, Chip, Empty, Field, LinkButton, PageTitle, SectionTitle, inputClass } from "@/components/ui";
+import { Button, Card, Chip, Empty, Field, LinkButton, PageTitle, SectionTitle, inputClass, rejectField } from "@/components/ui";
 import { BoundaryCard } from "@/components/boundary";
 import { OperationRow } from "@/components/operation-row";
 import { KIND_LABEL } from "@/lib/catalog";
 import { addSeason, alive, db, removePlot, updatePlot, updateSeason, type Finding, type Season, type Visit } from "@/lib/db";
 import { formatDate, todayISO } from "@/lib/format";
 import { usesByOperation } from "@/lib/stock";
-import { formatBRL, formatNumberBR, isSpent, yieldByPlot } from "@/lib/operations";
-import { daysSince, latestSeason, nextSeasonLabel } from "@/lib/season";
+import { formatBRL, formatNumberBR, isSpent, parseNumberBR, yieldByPlot } from "@/lib/operations";
+import { SEASON_LABEL_PATTERN, daysSince, latestSeason, nextSeasonLabel, normalizeSeasonLabel } from "@/lib/season";
 
 type Panel = "plot" | "season" | "new-season" | null;
 
@@ -77,20 +77,20 @@ function Plot() {
     const f = new FormData(e.currentTarget);
     const name = String(f.get("name") ?? "").trim();
     if (!name) return;
-    const area = parseFloat(String(f.get("area") ?? "").replace(",", "."));
-    await updatePlot(id, { name, areaHa: Number.isFinite(area) ? area : null });
+    await updatePlot(id, { name, areaHa: parseNumberBR(String(f.get("area") ?? "")) });
     setPanel(null);
   }
 
   async function saveSeason(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const f = new FormData(e.currentTarget);
+    const label = normalizeSeasonLabel(String(f.get("label") ?? ""));
+    if (!label) return rejectField(e.currentTarget, "label", "Use o formato 2026/27.");
     const values = {
-      label: String(f.get("label") ?? "").trim(),
+      label,
       cultivar: String(f.get("cultivar") ?? "").trim(),
       plantingDate: String(f.get("planting") ?? "") || null,
     };
-    if (!values.label) return;
     if (panel === "new-season") await addSeason(id, values);
     else if (current) await updateSeason(current.id, values);
     setPanel(null);
@@ -300,7 +300,7 @@ function SeasonForm({
         ) : null}
         <div className="grid grid-cols-[7rem_minmax(0,1fr)] gap-3">
           <Field label="Safra">
-            <input name="label" required defaultValue={season?.label ?? suggestedLabel ?? ""} className={inputClass} />
+            <input name="label" required pattern={SEASON_LABEL_PATTERN} title="Ex.: 2026/27" defaultValue={season?.label ?? suggestedLabel ?? ""} className={inputClass} />
           </Field>
           <Field label="Cultivar">
             <input name="cultivar" defaultValue={season?.cultivar ?? ""} className={inputClass} />

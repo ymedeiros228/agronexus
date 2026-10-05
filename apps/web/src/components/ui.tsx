@@ -4,6 +4,15 @@ import type { ButtonHTMLAttributes, ReactNode } from "react";
 export const inputClass =
   "w-full rounded-xl border border-border bg-surface px-3.5 py-3 text-foreground placeholder:text-muted/70 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20";
 
+/** Mostra o aviso do navegador num campo do formulário; some quando o usuário edita o campo. */
+export function rejectField(form: HTMLFormElement, name: string, message: string) {
+  const input = form.elements.namedItem(name);
+  if (!(input instanceof HTMLInputElement)) return;
+  input.setCustomValidity(message);
+  input.reportValidity();
+  input.addEventListener("input", () => input.setCustomValidity(""), { once: true });
+}
+
 export function Field({
   label,
   hint,

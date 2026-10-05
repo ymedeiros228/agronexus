@@ -5,11 +5,11 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState, type FormEvent } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { VisitRow } from "@/components/visit-row";
-import { Button, Card, Chip, Empty, Field, LinkButton, PageTitle, SectionTitle, inputClass } from "@/components/ui";
+import { Button, Card, Chip, Empty, Field, LinkButton, PageTitle, SectionTitle, inputClass, rejectField } from "@/components/ui";
 import { alive, db, newBase, removeFarm, removeRainfall, updateFarm } from "@/lib/db";
 import { formatDate, todayISO } from "@/lib/format";
-import { seasonLabels } from "@/lib/operations";
-import { daysSince, latestSeason, seasonLabelFor } from "@/lib/season";
+import { parseNumberBR, seasonLabels } from "@/lib/operations";
+import { SEASON_LABEL_PATTERN, daysSince, latestSeason, normalizeSeasonLabel, seasonLabelFor } from "@/lib/season";
 
 export default function FarmPage() {
   return (
@@ -49,14 +49,16 @@ function Farm() {
     const f = new FormData(form);
     const name = String(f.get("name") ?? "").trim();
     if (!name) return;
-    const area = parseFloat(String(f.get("area") ?? "").replace(",", "."));
-    const plot = { ...newBase(), farmId: id, name, areaHa: Number.isFinite(area) ? area : null };
+    const seasonText = String(f.get("season") ?? "").trim();
+    const label = seasonText ? normalizeSeasonLabel(seasonText) : seasonLabelFor();
+    if (!label) return rejectField(form, "season", "Use o formato 2026/27.");
+    const plot = { ...newBase(), farmId: id, name, areaHa: parseNumberBR(String(f.get("area") ?? "")) };
     await db.transaction("rw", db.plots, db.seasons, async () => {
       await db.plots.add(plot);
       await db.seasons.add({
         ...newBase(),
         plotId: plot.id,
-        label: String(f.get("season") ?? "").trim() || seasonLabelFor(),
+        label,
         cultivar: String(f.get("cultivar") ?? "").trim(),
         plantingDate: String(f.get("planting") ?? "") || null,
       });
@@ -69,8 +71,8 @@ function Farm() {
     e.preventDefault();
     const form = e.currentTarget;
     const f = new FormData(form);
-    const mm = parseFloat(String(f.get("mm") ?? "").replace(",", "."));
-    if (!Number.isFinite(mm) || mm < 0) return;
+    const mm = parseNumberBR(String(f.get("mm") ?? ""));
+    if (mm == null) return;
     await db.rainfall.add({ ...newBase(), farmId: id, date: String(f.get("date")), mm });
     form.reset();
   }
@@ -188,7 +190,7 @@ function Farm() {
                   <input name="area" inputMode="decimal" className={inputClass} placeholder="120" />
                 </Field>
                 <Field label="Safra">
-                  <input name="season" className={inputClass} defaultValue={seasonLabelFor()} />
+                  <input name="season" pattern={SEASON_LABEL_PATTERN} title="Ex.: 2026/27" className={inputClass} defaultValue={seasonLabelFor()} />
                 </Field>
               </div>
               <Field label="Cultivar">
