@@ -1,15 +1,15 @@
 # PROJECT_CONTEXT
 
 ## Estado atual
-Fase 1 em andamento. App web (PWA) em `apps/web`, local-first (dados no IndexedDB do aparelho, sem servidor). **Cliente: produtor/gestor** (ADR 0007). Referência visual e situação de cada tela: `docs/roadmap.md`.
+Fase 1 em andamento. App web (PWA) em `apps/web`, local-first (dados no IndexedDB do aparelho, sem servidor). **Duas frentes sobre o mesmo dado** (ADR 0008): o engenheiro agrônomo registra e recomenda no campo; o produtor/gestor vê, decide e controla o dinheiro (dono do dado, ADR 0007). Referência visual e situação de cada tela: `docs/roadmap.md`.
 
 Rodar localmente (a partir de `apps/web`):
 - Desenvolvimento: `npm run dev`
 - Produção (necessária para o service worker): `npm run build` e depois `npx next start -p 3100`
-- Conferência: `npx tsc --noEmit`, `npx eslint`, `npm test` (Vitest, 91 testes)
+- Conferência: `npx tsc --noEmit`, `npx eslint`, `npm test` (Vitest, 110 testes)
 
 ## Concluído
-- Repositório, docs, Plano Mestre, ADRs 0001 a 0007, roadmap por tela.
+- Repositório, docs, Plano Mestre, ADRs 0001 a 0008, roadmap por tela.
 - App em `apps/web` (Next.js 16, Tailwind 4, Dexie 4, lucide-react):
   - **Painel do gestor**: KPIs da safra só com dados registrados (área, produtividade sc/ha, custo/ha, operações abertas), "Pede atenção" (retorno atrasado, operação atrasada, talhão sem visita), situação de cada talhão, operações recentes, custos por tipo, produtividade por talhão, seletor de safra.
   - **Layout**: barra lateral verde no computador; no celular, barra inferior (Painel, Operações, +, Monitorar, Mais) e botão + (visita, operação ou entrada de insumo).
@@ -20,7 +20,7 @@ Rodar localmente (a partir de `apps/web`):
   - **Safras e relatório da safra**: lista de safras com progresso da colheita; relatório com área, produção, produtividade, custo realizado, custo/ha, custo por saca, por talhão, custo por tipo, insumos usados, fitossanidade, chuva do ano agrícola e comparação entre safras; compartilhar (WhatsApp) e PDF.
   - **Custo realizado x previsto**: só operação concluída ou em andamento entra no custo; planejada aparece como "previsto".
   - **Financeiro da safra**: vendas (sacas, preço líquido, comprador), despesas gerais por categoria, receita, custo total (operações + despesas), margem e margem/ha, ponto de equilíbrio (sc/ha ao preço médio e R$/sc com a produtividade), grão produzido/vendido/a vender, composição do custo. Entra no painel (custo/ha), no relatório e na comparação entre safras.
-  - **Mapa de talhões** (sem satélite, funciona offline): contorno caminhando com GPS (filtra precisão pior que 25 m e pontos a menos de 5 m; tela fica ligada onde o navegador deixa) ou importado de KML/GeoJSON; área e perímetro pelo contorno, botão para usar como área do talhão; mapa da fazenda colorido pela situação; rota até o talhão (abre o app de mapas); exportação KML.
+  - **Mapa de talhões** (com satélite da Esri guardado no aparelho para abrir offline): contorno caminhando com GPS (filtra precisão pior que 25 m e pontos a menos de 5 m; tela fica ligada onde o navegador deixa), desenhado com toques sobre o satélite ou importado de KML/KMZ/GeoJSON; área e perímetro pelo contorno, botão para usar como área do talhão; mapa da fazenda colorido pela situação; rota até o talhão (abre o app de mapas); exportação KML.
   - **Dados**: backup JSON de todas as tabelas (lista única em `backup.ts`), restauração que só mescla, lembrete de backup no painel, planilhas CSV (visitas, operações com insumos, estoque, vendas e despesas), armazenamento persistente.
   - Banco local na versão 6 (v2: safra na visita, tabela meta; v3: operações; v4: insumos e movimentos de estoque; v5: vendas e despesas; v6: rótulo da safra padronizado). Migrações até a v5 verificadas no navegador com dados de teste; a v6 só nos testes.
   - Rótulo da safra sempre no formato `2026/27` (aceita digitar `2026/2027`, `26/27`, `2026-27`), para vendas e despesas não se dividirem em safras diferentes.
@@ -40,6 +40,7 @@ Rodar localmente (a partir de `apps/web`):
 - 0005 IA: coletar fotos rotuladas primeiro, treinar depois.
 - 0006 Não usar dados internos de empresas de terceiros.
 - 0007 Cliente: produtor/gestor; quem registra pode ser ele, gerente, monitor ou consultor.
+- 0008 Duas frentes: engenheiro agrônomo e produtor, num app só, sobre o mesmo dado da fazenda.
 - Rotas dinâmicas usam query string (`/visita?id=...`) para serem estáticas e funcionarem offline.
 - Números digitados seguem o padrão brasileiro (`15.000` = quinze mil; `1.250,50`).
 
@@ -69,4 +70,4 @@ Rodar localmente (a partir de `apps/web`):
 - No navegador embutido do Claude Code, capturas de tela às vezes saem cortadas; a medição pelo DOM confirma que o layout está certo.
 
 ## Próximas etapas
-Ver `docs/roadmap.md` ("Ordem proposta").
+Ver `docs/roadmap.md` ("Plano de 28/10/2026"). Next 16.4.3 desde 28/10 (corrigiu 3 falhas de segurança da 16.3.8).

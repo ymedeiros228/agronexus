@@ -1,6 +1,6 @@
 # ADR 0007 — Cliente do produto: produtor / gestor da fazenda
 
-- Status: aceita (2026-10-03). Substitui a ADR 0002.
+- Status: aceita (2026-10-03). Substitui a ADR 0002. Complementada pela ADR 0008 (2026-10-28): o engenheiro agrônomo ganha frente própria; o produtor continua dono do dado.
 
 ## Contexto
 A ADR 0002 partiu da hipótese de que o primeiro usuário seria o técnico ou agrônomo que visita fazendas, porque a porta de entrada para testes é uma estagiária de agronomia que vai às fazendas. A fundadora esclareceu: essa pessoa é quem ajuda a validar e a chegar nos produtores, mas o **foco do produto é o produtor / gestor**, quem precisa ter a informação da lavoura na mão para decidir.
