@@ -20,6 +20,11 @@ describe("migração v1 → v2", () => {
       { id: "s-gone", plotId: "p1", label: "errada", createdAt: 3, updatedAt: 3, deletedAt: 3 },
       { id: "s-long", plotId: "p2", label: "2024/2025", createdAt: 1, updatedAt: 1 },
     ]);
+    await old.table("farms").bulkAdd([
+      { id: "f1", name: "Santa Luzia", municipality: "Balsas", owner: "João Ribeiro", createdAt: 1, updatedAt: 1 },
+      { id: "f2", name: "Retiro", municipality: "Balsas", owner: "joão  ribeiro", createdAt: 2, updatedAt: 2 },
+      { id: "f3", name: "Sem dono", municipality: "", owner: "", createdAt: 3, updatedAt: 3 },
+    ]);
     await old.table("visits").bulkAdd([
       { id: "v1", plotId: "p1", farmId: "f1", date: "2026-10-01", createdAt: 5, updatedAt: 5 },
       { id: "v2", plotId: "p-sem-safra", farmId: "f1", date: "2026-10-01", createdAt: 5, updatedAt: 5 },
@@ -38,5 +43,14 @@ describe("migração v1 → v2", () => {
     expect(long?.label).toBe("2024/25");
     expect(long?.updatedAt).toBe(1);
     expect((await db.seasons.get("s-gone"))?.label).toBe("errada");
+
+    // v7: o produtor escrito nas fazendas vira cliente da carteira.
+    const [f1, f2, f3] = await db.farms.bulkGet(["f1", "f2", "f3"]);
+    expect(f1?.clientId).toBeTruthy();
+    expect(f2?.clientId).toBe(f1?.clientId);
+    expect(f3?.clientId).toBeUndefined();
+    expect(f1?.updatedAt).toBe(1);
+    const clients = await db.clients.toArray();
+    expect(clients.map((c) => [c.name, c.municipality])).toEqual([["João Ribeiro", "Balsas"]]);
   });
 });

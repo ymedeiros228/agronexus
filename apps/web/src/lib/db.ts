@@ -15,10 +15,21 @@ type Base = {
   deletedAt?: number;
 };
 
+/** Cliente da carteira do engenheiro: o produtor dono de uma ou mais fazendas. */
+export type Client = Base & {
+  name: string;
+  phone: string;
+  municipality: string;
+  notes: string;
+};
+
 export type Farm = Base & {
   name: string;
   municipality: string;
+  /** Nome do produtor. Repete o nome do cliente, para backups e planilhas antigos. */
   owner: string;
+  /** Cliente da carteira. Ausente em fazendas de antes da v7 sem produtor informado. */
+  clientId?: string | null;
 };
 
 export type Plot = Base & {
@@ -36,6 +47,17 @@ export type Season = Base & {
   plantingDate: string | null; // AAAA-MM-DD
 };
 
+/** Quem registrou a visita: cópia do perfil no dia, para o relatório não mudar depois. */
+export type VisitAuthor = {
+  name: string;
+  role: string;
+  registry: string;
+  company: string;
+  phone: string;
+  supervisorName: string;
+  supervisorRegistry: string;
+};
+
 export type Visit = Base & {
   farmId: string;
   plotId: string;
@@ -47,6 +69,8 @@ export type Visit = Base & {
   recommendation: string;
   followUpDate: string | null;
   followUpDone: boolean;
+  /** Ausente em visitas de antes da v7: o relatório usa o perfil atual. */
+  author?: VisitAuthor | null;
 };
 
 export type FindingKind = "praga" | "doenca" | "daninha" | "outro";
@@ -182,6 +206,7 @@ class AgroDB extends Dexie {
   stockMoves!: EntityTable<StockMove, "id">;
   sales!: EntityTable<Sale, "id">;
   expenses!: EntityTable<Expense, "id">;
+  clients!: EntityTable<Client, "id">;
   meta!: EntityTable<Meta, "key">;
 
   constructor() {
@@ -242,7 +267,60 @@ class AgroDB extends Dexie {
         await tx.table("sales").toCollection().modify(fix("seasonLabel"));
         await tx.table("expenses").toCollection().modify(fix("seasonLabel"));
       });
+    // v7: carteira de clientes. Cada produtor ("owner") das fazendas vira um cliente.
+    this.version(7)
+      .stores({
+        clients: "id, name, updatedAt",
+        farms: "id, name, clientId, updatedAt",
+      })
+      .upgrade(async (tx) => {
+        const farms = await tx.table<Farm>("farms").toArray();
+        const { clients, links } = planClientsFromOwners(farms, [], Date.now());
+        if (clients.length) await tx.table<Client>("clients").bulkAdd(clients);
+        // Migração não é edição do usuário: updatedAt das fazendas fica como estava.
+        for (const [farmId, clientId] of links) await tx.table<Farm>("farms").update(farmId, { clientId });
+      });
   }
+}
+
+/** Nome para comparar clientes: sem diferença de maiúscula, acento ou espaço sobrando. */
+export function clientKey(name: string): string {
+  return name
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
+/**
+ * Clientes que faltam para as fazendas que têm produtor escrito mas nenhum cliente ligado.
+ * Reaproveita o cliente que já existe com o mesmo nome. Pura, para a migração e a restauração.
+ */
+export function planClientsFromOwners(
+  farms: Farm[],
+  existing: Client[],
+  now: number,
+): { clients: Client[]; links: [farmId: string, clientId: string][] } {
+  const byKey = new Map(existing.filter((c) => !c.deletedAt).map((c) => [clientKey(c.name), c]));
+  const clients: Client[] = [];
+  const links: [string, string][] = [];
+  for (const farm of [...farms].sort((a, b) => a.createdAt - b.createdAt)) {
+    const name = farm.owner?.replace(/\s+/g, " ").trim();
+    if (farm.clientId || !name) continue;
+    let client = byKey.get(clientKey(name));
+    if (!client) {
+      client = { id: crypto.randomUUID(), createdAt: now, updatedAt: now, name, phone: "", municipality: farm.municipality ?? "", notes: "" };
+      // Cliente de fazenda já removida nasce removido, para não aparecer vazio na carteira.
+      if (farm.deletedAt) client.deletedAt = farm.deletedAt;
+      byKey.set(clientKey(name), client);
+      clients.push(client);
+    } else if (client.deletedAt && !farm.deletedAt) {
+      delete client.deletedAt;
+    }
+    links.push([farm.id, client.id]);
+  }
+  return { clients, links };
 }
 
 export const db = new AgroDB();
@@ -294,7 +372,7 @@ export function setFollowUpDone(id: string, done: boolean) {
   return db.visits.update(id, { followUpDone: done, updatedAt: Date.now() });
 }
 
-export function updateFarm(id: string, patch: Pick<Farm, "name" | "municipality" | "owner">) {
+export function updateFarm(id: string, patch: Pick<Farm, "name" | "municipality" | "owner"> & Partial<Pick<Farm, "clientId">>) {
   return db.farms.update(id, { ...patch, updatedAt: Date.now() });
 }
 
@@ -338,24 +416,41 @@ export async function removePlot(id: string): Promise<number> {
   return mark.deletedAt;
 }
 
+const FARM_TABLES = () => [db.farms, db.rainfall, db.sales, db.expenses, ...PLOT_TABLES()];
+
+/** Fazenda com talhões (e tudo deles), chuvas, vendas e despesas. Dentro de uma transação com FARM_TABLES. */
+async function removeFarmCascade(id: string, mark: ReturnType<typeof gone>) {
+  await db.farms.update(id, mark);
+  await removePlotsCascade(await db.plots.where("farmId").equals(id).primaryKeys(), mark);
+  // Visitas e operações também têm farmId; pega as que estejam num talhão já removido antes.
+  const visits = await db.visits.where("farmId").equals(id).filter((r) => !r.deletedAt).primaryKeys();
+  await db.visits.where("id").anyOf(visits).modify(mark);
+  await removeVisitChildren(visits, mark);
+  const ops = await db.operations.where("farmId").equals(id).filter((r) => !r.deletedAt).primaryKeys();
+  await db.operations.where("id").anyOf(ops).modify(mark);
+  await removeUses(ops, mark);
+  await db.rainfall.where("farmId").equals(id).filter((r) => !r.deletedAt).modify(mark);
+  // Vendas e despesas não têm índice de fazenda; são poucas, filtra na memória.
+  await db.sales.filter((r) => r.farmId === id && !r.deletedAt).modify(mark);
+  await db.expenses.filter((r) => r.farmId === id && !r.deletedAt).modify(mark);
+}
+
 /** Remove a fazenda com talhões (e tudo deles), chuvas, vendas e despesas (exclusão lógica). */
 export async function removeFarm(id: string): Promise<number> {
   const mark = gone();
-  const tables = [db.farms, db.rainfall, db.sales, db.expenses, ...PLOT_TABLES()];
-  await db.transaction("rw", tables, async () => {
-    await db.farms.update(id, mark);
-    await removePlotsCascade(await db.plots.where("farmId").equals(id).primaryKeys(), mark);
-    // Visitas e operações também têm farmId; pega as que estejam num talhão já removido antes.
-    const visits = await db.visits.where("farmId").equals(id).filter((r) => !r.deletedAt).primaryKeys();
-    await db.visits.where("id").anyOf(visits).modify(mark);
-    await removeVisitChildren(visits, mark);
-    const ops = await db.operations.where("farmId").equals(id).filter((r) => !r.deletedAt).primaryKeys();
-    await db.operations.where("id").anyOf(ops).modify(mark);
-    await removeUses(ops, mark);
-    await db.rainfall.where("farmId").equals(id).filter((r) => !r.deletedAt).modify(mark);
-    // Vendas e despesas não têm índice de fazenda; são poucas, filtra na memória.
-    await db.sales.filter((r) => r.farmId === id && !r.deletedAt).modify(mark);
-    await db.expenses.filter((r) => r.farmId === id && !r.deletedAt).modify(mark);
+  await db.transaction("rw", FARM_TABLES(), async () => {
+    await removeFarmCascade(id, mark);
+  });
+  return mark.deletedAt;
+}
+
+/** Remove o cliente e as fazendas dele, com tudo o que há nelas (exclusão lógica, um só "desfazer"). */
+export async function removeClient(id: string): Promise<number> {
+  const mark = gone();
+  await db.transaction("rw", [db.clients, ...FARM_TABLES()], async () => {
+    await db.clients.update(id, mark);
+    const farms = await db.farms.where("clientId").equals(id).filter((f) => !f.deletedAt).primaryKeys();
+    for (const farmId of farms) await removeFarmCascade(farmId, mark);
   });
   return mark.deletedAt;
 }

@@ -6,13 +6,18 @@ Fase 1 em andamento. App web (PWA) em `apps/web`, local-first (dados no IndexedD
 Rodar localmente (a partir de `apps/web`):
 - Desenvolvimento: `npm run dev`
 - Produção (necessária para o service worker): `npm run build` e depois `npx next start -p 3100`
-- Conferência: `npx tsc --noEmit`, `npx eslint`, `npm test` (Vitest, 110 testes)
+- Conferência: `npx tsc --noEmit`, `npx eslint`, `npm test` (Vitest, 135 testes)
 
 ## Concluído
 - Repositório, docs, Plano Mestre, ADRs 0001 a 0008, roadmap por tela.
 - App em `apps/web` (Next.js 16, Tailwind 4, Dexie 4, lucide-react):
   - **Painel do gestor**: KPIs da safra só com dados registrados (área, produtividade sc/ha, custo/ha, operações abertas), "Pede atenção" (retorno atrasado, operação atrasada, talhão sem visita), situação de cada talhão, operações recentes, custos por tipo, produtividade por talhão, seletor de safra.
-  - **Layout**: barra lateral verde no computador; no celular, barra inferior (Painel, Operações, +, Monitorar, Mais) e botão + (visita, operação ou entrada de insumo).
+  - **Dois modos** (ADR 0008), escolhidos na primeira tela e trocáveis em "Meu perfil": **Vou a campo** (agrônomo, técnico, estagiário, RTV, monitor) abre na agenda "Hoje"; **Cuido da fazenda** (produtor, gestor) abre no painel. Sem escolha, o app fica no modo gestão (como antes).
+  - **Layout**: barra lateral verde no computador; no celular, barra inferior e botão + que mudam com o modo (campo: Hoje, Clientes, +, Visitas, Mais; gestão: Painel, Operações, +, Monitorar, Mais).
+  - **Meu perfil** (`/perfil`, gravado em `meta`): nome, função, registro (CREA/CFTA conforme a função), empresa, telefone e responsável técnico (obrigatório para estagiário e monitor). Prévia da assinatura do relatório.
+  - **Carteira de clientes** (`/clientes`, `/cliente?id=`): busca por cliente, fazenda ou município (sem acento), WhatsApp e ligar, última visita e retornos atrasados; ficha com fazendas, área, últimas visitas, "Nova visita"; remover leva as fazendas com "Desfazer". Fazenda tem campo "Cliente" (escolhe da lista ou cria na hora). `farm.owner` continua gravado com o nome do cliente (backup, CSV).
+  - **Agenda "Hoje"** (`/` no modo campo e `/agenda`): atrasados, hoje, sem visita (mesma regra do painel, `visitState`) e próximos 7 dias; cada talhão uma vez, com cliente, fazenda, DAP, motivo, "Visitar" (abre a visita já no talhão) e "Rota". Primeiros passos numerados quando não há fazenda.
+  - **Relatório com identidade**: a visita grava o autor (cópia do perfil); o relatório (tela, PDF e WhatsApp) traz o produtor e termina com nome, função, registro, empresa, telefone e "Sob supervisão de Eng. Agr. …". Com o telefone do cliente, botão "Enviar para … no WhatsApp" já abre a conversa com ele. Nova visita no talhão marca como feitos os retornos pendentes anteriores.
   - **Fazendas e talhões**: cadastrar, editar, remover (exclusão lógica em cascata). Página do talhão com safra atual, nova safra, achados da safra, operações, linha do tempo e safras anteriores.
   - **Monitoramento**: visita com estágio, achados, fotos com diagnóstico e GPS, recomendação, retorno; editar visita; relatório (WhatsApp/PDF); tela de ocorrências e lista de visitas.
   - **Operações**: preparo, plantio, adubação, aplicação, colheita, outro; planejada/em andamento/concluída; área, custo, sacas colhidas (produtividade); atalho para concluir; plantio concluído preenche a data de plantio vazia da safra.
@@ -22,7 +27,7 @@ Rodar localmente (a partir de `apps/web`):
   - **Financeiro da safra**: vendas (sacas, preço líquido, comprador), despesas gerais por categoria, receita, custo total (operações + despesas), margem e margem/ha, ponto de equilíbrio (sc/ha ao preço médio e R$/sc com a produtividade), grão produzido/vendido/a vender, composição do custo. Entra no painel (custo/ha), no relatório e na comparação entre safras.
   - **Mapa de talhões** (com satélite da Esri guardado no aparelho para abrir offline): contorno caminhando com GPS (filtra precisão pior que 25 m e pontos a menos de 5 m; tela fica ligada onde o navegador deixa), desenhado com toques sobre o satélite ou importado de KML/KMZ/GeoJSON; área e perímetro pelo contorno, botão para usar como área do talhão; mapa da fazenda colorido pela situação; rota até o talhão (abre o app de mapas); exportação KML.
   - **Dados**: backup JSON de todas as tabelas (lista única em `backup.ts`), restauração que só mescla, lembrete de backup no painel, planilhas CSV (visitas, operações com insumos, estoque, vendas e despesas), armazenamento persistente.
-  - Banco local na versão 6 (v2: safra na visita, tabela meta; v3: operações; v4: insumos e movimentos de estoque; v5: vendas e despesas; v6: rótulo da safra padronizado). Migrações até a v5 verificadas no navegador com dados de teste; a v6 só nos testes.
+  - Banco local na versão 7 (v2: safra na visita, tabela meta; v3: operações; v4: insumos e movimentos de estoque; v5: vendas e despesas; v6: rótulo da safra padronizado; v7: tabela `clients`, um cliente por produtor distinto das fazendas). Migrações até a v5 verificadas no navegador com dados de teste; v6 e v7 nos testes.
   - Rótulo da safra sempre no formato `2026/27` (aceita digitar `2026/2027`, `26/27`, `2026-27`), para vendas e despesas não se dividirem em safras diferentes.
   - Áreas e chuva digitadas seguem o padrão brasileiro (`parseNumberBR`).
   - Exclusão em cascata completa: visita leva achados e fotos; talhão leva safras, visitas e operações; fazenda leva tudo.
@@ -46,6 +51,7 @@ Rodar localmente (a partir de `apps/web`):
 
 ## Padrões a validar com agrônomo e produtores
 - Aviso de talhão sem visita: mais de 7 dias (`NO_VISIT_ALERT_DAYS`).
+- Nova visita no talhão fecha os retornos pendentes anteriores do mesmo talhão (`createVisit`). Decisão do desenvolvimento; validar com a estagiária.
 - Não cobra visita depois de 150 dias do plantio ou com estágio R8 (`MAX_CYCLE_DAYS`).
 - Catálogo de estágios, pragas e doenças é preliminar; sem níveis de ação nem recomendação de produto.
 - Estoque é um só para a conta (não separa por fazenda/depósito). Preço médio = valor pago nas entradas ÷ quantidade dessas entradas (média simples, não móvel).
@@ -56,7 +62,7 @@ Rodar localmente (a partir de `apps/web`):
 
 ## Pendente
 - **Hospedagem de teste (HTTPS)**: necessária para testar no celular e o offline real (o navegador embutido não registra service worker). Opções levantadas em 2026-10-04, aguardando escolha da fundadora.
-- Servidor, login e sincronização (para o gestor ver o que outra pessoa registrou).
+- **Etapa 2 do plano**: servidor (Supabase, conta nova só do AgroNexus, região São Paulo), login, envio automático quando houver sinal e publicação na Vercel. Depende de o Yuri criar a conta e o projeto.
 - Orçamento mensal (não informado). Nome/marca/domínio/INPI.
 - Testadores reais (pelo menos 3). A irmã da fundadora (estagiária de agronomia) é a porta de entrada para produtores.
 - `npm audit`: 5 vulnerabilidades altas na cadeia do ESLint (só desenvolvimento); corrigir com `--force` rebaixaria o eslint-config-next.

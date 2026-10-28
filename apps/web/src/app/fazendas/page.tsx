@@ -1,37 +1,55 @@
 "use client";
 
 import Link from "next/link";
-import { useState, type FormEvent } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useState, type FormEvent } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { Button, Card, Empty, Field, inputClass, PageSkeleton, PageTitle } from "@/components/ui";
 import { ChevronRight } from "lucide-react";
+import { ClientField } from "@/components/client-bits";
 import { ShapeThumb } from "@/components/map-bits";
 import { toast } from "@/components/toaster";
-import { alive, db, newBase } from "@/lib/db";
+import { createFarm } from "@/lib/clients";
+import { alive, db } from "@/lib/db";
 import { formatNumberBR } from "@/lib/operations";
 
 export default function FarmsPage() {
-  const [open, setOpen] = useState(false);
+  return (
+    <Suspense fallback={null}>
+      <Farms />
+    </Suspense>
+  );
+}
+
+function Farms() {
+  const router = useRouter();
+  // Vindo da ficha do cliente (?cliente=), o formulário já abre com ele escolhido.
+  const clientId = useSearchParams().get("cliente") ?? "";
+  const [opened, setOpened] = useState(false);
   const data = useLiveQuery(async () => {
-    const [farms, plots] = await Promise.all([db.farms.orderBy("name").toArray(), db.plots.toArray()]);
-    return { farms: alive(farms), plots: alive(plots) };
+    const [farms, plots, clients] = await Promise.all([db.farms.orderBy("name").toArray(), db.plots.toArray(), db.clients.orderBy("name").toArray()]);
+    return { farms: alive(farms), plots: alive(plots), clients: alive(clients) };
   });
+  const preset = data?.clients.find((c) => c.id === clientId);
+  const open = opened || !!preset;
+
+  function close() {
+    setOpened(false);
+    if (clientId) router.replace("/fazendas");
+  }
 
   async function addFarm(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const form = e.currentTarget;
-    const f = new FormData(form);
+    const f = new FormData(e.currentTarget);
     const name = String(f.get("name") ?? "").trim();
     if (!name) return;
-    await db.farms.add({
-      ...newBase(),
+    const farm = await createFarm({
       name,
-      municipality: String(f.get("municipality") ?? "").trim(),
-      owner: String(f.get("owner") ?? "").trim(),
+      municipality: String(f.get("municipality") ?? ""),
+      clientName: String(f.get("client") ?? ""),
     });
-    form.reset();
-    setOpen(false);
-    toast(`${name} cadastrada.`);
+    toast(`${farm.name} cadastrada. Agora os talhões.`);
+    router.push(`/fazenda?id=${farm.id}`);
   }
 
   if (!data) return <PageSkeleton />;
@@ -41,7 +59,7 @@ export default function FarmsPage() {
       <PageTitle
         title="Fazendas"
         action={
-          <Button variant={open ? "secondary" : "primary"} onClick={() => setOpen((o) => !o)}>
+          <Button variant={open ? "secondary" : "primary"} onClick={() => (open ? close() : setOpened(true))}>
             {open ? "Cancelar" : "+ Fazenda"}
           </Button>
         }
@@ -54,11 +72,9 @@ export default function FarmsPage() {
               <input name="name" required autoFocus className={inputClass} placeholder="Ex.: Fazenda Boa Esperança" />
             </Field>
             <Field label="Município">
-              <input name="municipality" className={inputClass} placeholder="Ex.: Balsas" />
+              <input name="municipality" defaultValue={preset?.municipality} className={inputClass} placeholder="Ex.: Balsas" />
             </Field>
-            <Field label="Produtor / responsável">
-              <input name="owner" className={inputClass} />
-            </Field>
+            <ClientField clients={data.clients} defaultValue={preset?.name} />
             <Button type="submit" className="w-full">
               Salvar fazenda
             </Button>
@@ -70,7 +86,7 @@ export default function FarmsPage() {
         <Empty
           title="Nenhuma fazenda ainda"
           text="Cadastre a primeira para começar a registrar visitas."
-          action={<Button onClick={() => setOpen(true)}>+ Fazenda</Button>}
+          action={<Button onClick={() => setOpened(true)}>+ Fazenda</Button>}
         />
       ) : (
         <ul className="grid grid-cols-1 gap-3 lg:grid-cols-2">

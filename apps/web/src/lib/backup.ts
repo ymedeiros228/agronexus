@@ -1,5 +1,7 @@
+import { linkOwnersToClients } from "./clients";
 import { db, setMeta, type Photo } from "./db";
 import { JsonStreamError, readJsonObject } from "./json-stream";
+import { PROFILE_KEY, getProfile, type Profile } from "./profile";
 import { normalizeSeasonLabel } from "./season";
 
 /**
@@ -26,6 +28,7 @@ const TABLES = [
   "stockMoves",
   "sales",
   "expenses",
+  "clients",
 ] as const;
 
 type TableName = (typeof TABLES)[number];
@@ -57,6 +60,8 @@ export async function exportBackup(): Promise<Blob> {
   const header = { app: "agronexus", version: VERSION, exportedAt: new Date().toISOString() };
   // Cada foto vira um Blob próprio, para a string base64 dela poder ser liberada logo.
   const parts: (string | Blob)[] = [JSON.stringify(header).slice(0, -1)];
+  const profile = await getProfile();
+  if (profile) parts.push(`,"profile":${JSON.stringify(profile)}`);
   for (const t of TABLES) parts.push(`,${JSON.stringify(t)}:${JSON.stringify(await db.table(t).toArray())}`);
   parts.push(`,"photos":[`);
   const ids = await db.photos.toCollection().primaryKeys();
@@ -105,6 +110,7 @@ const REQUIRED: Record<TableName | "photos", Record<string, "string" | "number" 
   stockMoves: { supplyId: "string", kind: "string", qty: "number", date: "string" },
   sales: { seasonLabel: "string", date: "string", bags: "number", pricePerBag: "number" },
   expenses: { seasonLabel: "string", date: "string", category: "string", amount: "number" },
+  clients: { name: "string" },
   photos: { visitId: "string" },
 };
 
@@ -153,8 +159,9 @@ export async function importBackup(file: File): Promise<number> {
     if (tablesDone) return;
     if (!isBackup()) throw new Error(NOT_BACKUP);
     tablesDone = true;
-    await db.transaction("rw", TABLES.map((t) => db.table(t)), async () => {
+    await db.transaction("rw", [...TABLES.map((t) => db.table(t)), db.meta], async () => {
       for (const t of TABLES) written += await merge(data[t], t);
+      await restoreProfile(data.profile);
     });
   };
 
@@ -185,5 +192,16 @@ export async function importBackup(file: File): Promise<number> {
   }
   await writeTables();
   await writePhotos();
+  // Backup de antes da carteira de clientes: o produtor escrito na fazenda vira cliente.
+  await linkOwnersToClients();
   return written;
+}
+
+/** O perfil do arquivo só entra se este aparelho ainda não tem um (não troca quem está usando). */
+async function restoreProfile(value: unknown) {
+  if (typeof value !== "object" || value === null) return;
+  const p = value as Partial<Profile>;
+  if (typeof p.name !== "string" || typeof p.role !== "string" || typeof p.mode !== "string") return;
+  if (await getProfile()) return;
+  await setMeta(PROFILE_KEY, value);
 }

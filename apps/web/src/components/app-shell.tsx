@@ -5,8 +5,10 @@ import { usePathname } from "next/navigation";
 import { useState, type ReactNode } from "react";
 import {
   Bug,
+  CalendarCheck,
   CalendarRange,
   ClipboardList,
+  Contact,
   HardDrive,
   LayoutDashboard,
   Map as MapIcon,
@@ -17,17 +19,45 @@ import {
   Plus,
   Sprout,
   Tractor,
+  UserRound,
+  UserRoundPlus,
   Wallet,
   X,
   type LucideIcon,
 } from "lucide-react";
+import type { Mode } from "@/lib/profile";
 import { DemoBanner } from "./demo-bits";
 import { OnlineBadge } from "./online-badge";
+import { useMode } from "./profile-bits";
 import { Toaster } from "./toaster";
 
 type NavItem = { href: string; label: string; short: string; icon: LucideIcon; match: (p: string) => boolean };
 
-const PANEL: NavItem = { href: "/", label: "Painel", short: "Painel", icon: LayoutDashboard, match: (p) => p === "/" };
+const PANEL: NavItem = {
+  href: "/",
+  label: "Painel",
+  short: "Painel",
+  icon: LayoutDashboard,
+  match: (p) => p === "/" || p === "/painel",
+};
+/** Modo campo: a tela inicial é a agenda do dia; o painel da safra fica em "Mais". */
+const TODAY: NavItem = {
+  href: "/",
+  label: "Hoje",
+  short: "Hoje",
+  icon: CalendarCheck,
+  match: (p) => p === "/" || p.startsWith("/agenda"),
+};
+const FIELD_PANEL: NavItem = { ...PANEL, href: "/painel", label: "Painel da safra", match: (p) => p === "/painel" };
+const AGENDA: NavItem = { href: "/agenda", label: "Agenda de visitas", short: "Agenda", icon: CalendarCheck, match: (p) => p.startsWith("/agenda") };
+const CLIENTS: NavItem = {
+  href: "/clientes",
+  label: "Clientes",
+  short: "Clientes",
+  icon: Contact,
+  match: (p) => p.startsWith("/cliente"),
+};
+const PROFILE: NavItem = { href: "/perfil", label: "Meu perfil", short: "Perfil", icon: UserRound, match: (p) => p.startsWith("/perfil") };
 const FARMS: NavItem = {
   href: "/fazendas",
   label: "Fazendas e talhões",
@@ -72,37 +102,74 @@ const MONITORING: NavItem = {
   match: (p) => p.startsWith("/visita"),
 };
 const DATA: NavItem = { href: "/dados", label: "Dados e backup", short: "Dados", icon: HardDrive, match: (p) => p.startsWith("/dados") };
+const VISITS: NavItem = { ...MONITORING, label: "Visitas", short: "Visitas", icon: ClipboardList };
 
-const NAV = [PANEL, FARMS, MAP, SEASONS, OPERATIONS, SUPPLIES, FINANCE, MONITORING, DATA];
-/** No celular, o que não cabe na barra inferior fica em "Mais". */
-const MORE = [FARMS, MAP, SEASONS, SUPPLIES, FINANCE, DATA];
+type Action = { href: string; label: string; short: string; text: string; icon: LucideIcon };
 
-const NEW_ACTIONS = [
-  {
-    href: "/visitas/nova",
-    label: "Visita de monitoramento",
-    short: "Nova visita",
-    text: "Pragas, doenças, fotos e recomendação",
-    icon: ClipboardList,
+const NEW_VISIT: Action = {
+  href: "/visitas/nova",
+  label: "Visita de monitoramento",
+  short: "Nova visita",
+  text: "Pragas, doenças, fotos e recomendação",
+  icon: ClipboardList,
+};
+const NEW_OPERATION: Action = {
+  href: "/operacoes/nova",
+  label: "Operação",
+  short: "Nova operação",
+  text: "Plantio, aplicação, adubação, colheita",
+  icon: Tractor,
+};
+const NEW_SUPPLY: Action = {
+  href: "/insumos/movimento?tipo=entrada",
+  label: "Entrada de insumo",
+  short: "Entrada de insumo",
+  text: "Compra ou recebimento no estoque",
+  icon: PackagePlus,
+};
+const NEW_CLIENT: Action = {
+  href: "/clientes?novo=1",
+  label: "Cliente",
+  short: "Novo cliente",
+  text: "Produtor que você passa a atender",
+  icon: UserRoundPlus,
+};
+
+/**
+ * Menu de cada modo (ADR 0008). `bar` é a barra inferior do celular (null = botão +);
+ * `more` é o que não coube nela. Nos dois modos dá para chegar em todas as telas.
+ */
+const MENUS: Record<Mode, { nav: NavItem[]; bar: (NavItem | null)[]; more: NavItem[]; actions: Action[] }> = {
+  campo: {
+    nav: [TODAY, CLIENTS, VISITS, FARMS, MAP, FIELD_PANEL, SEASONS, OPERATIONS, SUPPLIES, FINANCE, PROFILE, DATA],
+    bar: [TODAY, CLIENTS, null, VISITS],
+    more: [FARMS, MAP, FIELD_PANEL, SEASONS, OPERATIONS, SUPPLIES, FINANCE, PROFILE, DATA],
+    actions: [NEW_VISIT, NEW_CLIENT, NEW_OPERATION],
   },
-  {
-    href: "/operacoes/nova",
-    label: "Operação",
-    short: "Nova operação",
-    text: "Plantio, aplicação, adubação, colheita",
-    icon: Tractor,
+  gestao: {
+    nav: [PANEL, FARMS, MAP, SEASONS, OPERATIONS, SUPPLIES, FINANCE, MONITORING, AGENDA, CLIENTS, PROFILE, DATA],
+    bar: [PANEL, OPERATIONS, null, MONITORING],
+    more: [FARMS, MAP, SEASONS, SUPPLIES, FINANCE, AGENDA, CLIENTS, PROFILE, DATA],
+    actions: [NEW_VISIT, NEW_OPERATION, NEW_SUPPLY],
   },
-  {
-    href: "/insumos/movimento?tipo=entrada",
-    label: "Entrada de insumo",
-    short: "Entrada de insumo",
-    text: "Compra ou recebimento no estoque",
-    icon: PackagePlus,
-  },
-];
+};
 
 /** Telas de painel e listas usam a largura toda no computador; formulários ficam estreitos. */
-const WIDE = ["/", "/operacoes", "/visitas", "/fazendas", "/insumos", "/safras", "/safra", "/financeiro", "/mapa"];
+const WIDE = [
+  "/",
+  "/painel",
+  "/agenda",
+  "/clientes",
+  "/cliente",
+  "/operacoes",
+  "/visitas",
+  "/fazendas",
+  "/insumos",
+  "/safras",
+  "/safra",
+  "/financeiro",
+  "/mapa",
+];
 
 function Logo({ dark = false }: { dark?: boolean }) {
   return (
@@ -156,19 +223,21 @@ function SheetLink({
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [sheet, setSheet] = useState<"novo" | "mais" | null>(null);
+  const mode = useMode();
   const wide = WIDE.includes(pathname);
-  const mobileNav = [PANEL, OPERATIONS, null, MONITORING];
-  const moreActive = MORE.some((m) => m.match(pathname));
+  // Enquanto o modo não foi lido, o menu fica vazio (evita piscar o menu do outro modo).
+  const menu = mode ? MENUS[mode] : { nav: [], bar: [undefined, undefined, null, undefined], more: [], actions: [] };
+  const moreActive = menu.more.some((m) => m.match(pathname));
 
   return (
     <div className="min-h-dvh md:pl-64 print:pl-0">
       {/* Computador: barra lateral */}
-      <aside className="no-print fixed inset-y-0 left-0 z-20 hidden w-64 flex-col overflow-y-auto bg-sidebar px-4 py-5 text-sidebar-fg md:flex">
+      <aside className="no-print fixed inset-y-0 left-0 z-20 hidden w-64 flex-col overflow-y-auto bg-sidebar px-4 py-5 text-sidebar-fg [scrollbar-color:rgba(255,255,255,0.18)_transparent] [scrollbar-width:thin] md:flex">
         <div className="px-2">
           <Logo dark />
         </div>
         <div className="mt-6 grid grid-cols-1 gap-2">
-          {NEW_ACTIONS.map((a) => (
+          {menu.actions.map((a) => (
             <Link
               key={a.href}
               href={a.href}
@@ -180,7 +249,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
         <nav aria-label="Navegação principal" className="mt-6 flex-1">
           <ul className="space-y-1">
-            {NAV.map((item) => {
+            {menu.nav.map((item) => {
               const active = item.match(pathname);
               const Icon = item.icon;
               return (
@@ -229,7 +298,8 @@ export function AppShell({ children }: { children: ReactNode }) {
         className="no-print fixed inset-x-0 bottom-0 z-10 border-t border-border bg-surface/95 backdrop-blur md:hidden"
       >
         <ul className="mx-auto grid max-w-xl grid-cols-5 items-end px-1 pb-[max(0.4rem,env(safe-area-inset-bottom))] pt-1.5">
-          {mobileNav.map((item) => {
+          {menu.bar.map((item, i) => {
+            if (item === undefined) return <li key={i} aria-hidden className="min-h-12" />;
             if (!item) {
               return (
                 <li key="novo" className="flex justify-center">
@@ -286,7 +356,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           aria-label={sheet === "novo" ? "Registrar" : "Mais"}
         >
           <button type="button" aria-label="Fechar" className="absolute inset-0 bg-black/40" onClick={() => setSheet(null)} />
-          <div className="absolute inset-x-0 bottom-0 space-y-3 rounded-t-3xl bg-surface p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-2xl">
+          <div className="absolute inset-x-0 bottom-0 max-h-[85dvh] space-y-3 overflow-y-auto rounded-t-3xl bg-surface p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-2xl">
             <div className="flex items-center justify-between">
               <p className="font-semibold">{sheet === "novo" ? "O que você quer registrar?" : "Mais"}</p>
               <button type="button" onClick={() => setSheet(null)} aria-label="Fechar" className="grid size-10 place-items-center rounded-full text-muted">
@@ -294,12 +364,12 @@ export function AppShell({ children }: { children: ReactNode }) {
               </button>
             </div>
             {sheet === "novo" ? (
-              NEW_ACTIONS.map((a) => (
+              menu.actions.map((a) => (
                 <SheetLink key={a.href} href={a.href} icon={a.icon} label={a.label} text={a.text} onClick={() => setSheet(null)} />
               ))
             ) : (
               <div className="grid grid-cols-2 gap-2">
-                {MORE.map((m) => {
+                {menu.more.map((m) => {
                   const Icon = m.icon;
                   const active = m.match(pathname);
                   return (

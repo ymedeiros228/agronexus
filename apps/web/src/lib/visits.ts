@@ -1,4 +1,5 @@
 import { alive, db, newBase, type Finding, type FindingKind, type Photo, type Visit } from "./db";
+import { authorFromProfile, getProfile } from "./profile";
 import { latestSeason } from "./season";
 
 /**
@@ -38,7 +39,12 @@ async function currentSeasonId(plotId: string): Promise<string | null> {
   return latestSeason(alive(await db.seasons.where("plotId").equals(plotId).toArray()))?.id ?? null;
 }
 
+/**
+ * Grava a visita nova com o autor (cópia do perfil) e dá por feitos os retornos que estavam
+ * pendentes no talhão em visitas até esta data: quem voltou ao talhão cumpriu o retorno.
+ */
 export async function createVisit(input: VisitInput): Promise<string> {
+  const author = authorFromProfile(await getProfile());
   const visit: Visit = {
     ...newBase(),
     farmId: input.farmId,
@@ -50,8 +56,14 @@ export async function createVisit(input: VisitInput): Promise<string> {
     recommendation: input.recommendation.trim(),
     followUpDate: input.followUpDate,
     followUpDone: false,
+    ...(author ? { author } : {}),
   };
   await db.transaction("rw", db.visits, db.findings, db.photos, async () => {
+    await db.visits
+      .where("plotId")
+      .equals(input.plotId)
+      .filter((v) => !v.deletedAt && !!v.followUpDate && !v.followUpDone && v.date <= input.date)
+      .modify({ followUpDone: true, updatedAt: visit.updatedAt });
     await db.visits.add(visit);
     const fs: Finding[] = cleanFindings(input.findings).map((f) => ({
       ...newBase(),

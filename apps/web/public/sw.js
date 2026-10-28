@@ -5,7 +5,7 @@
  * - Imagens de satélite do mapa: cache primeiro, num cache próprio que passa de uma versão para outra.
  * Os dados do usuário ficam no IndexedDB, não aqui.
  */
-const CACHE = "agronexus-v16";
+const CACHE = "agronexus-v17";
 const TILES = "agronexus-tiles";
 /** Uns 15 KB por imagem: cerca de 60 MB no máximo. */
 const MAX_TILES = 4000;
@@ -33,6 +33,11 @@ const PAGES = [
   "/financeiro/venda",
   "/financeiro/despesa",
   "/mapa",
+  "/painel",
+  "/agenda",
+  "/clientes",
+  "/cliente",
+  "/perfil",
   "/dados",
 ];
 const EXTRAS = ["/manifest.webmanifest", "/icon-192.png", "/icon-512.png", "/icon-maskable-512.png"];

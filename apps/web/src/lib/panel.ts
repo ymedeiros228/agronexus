@@ -59,6 +59,37 @@ function isoDaysAgo(today: string, days: number): string {
 
 const byDateDesc = (a: Visit, b: Visit) => (a.date < b.date ? 1 : a.date > b.date ? -1 : b.createdAt - a.createdAt);
 
+export type VisitState = {
+  season?: Season;
+  lastVisit?: Visit;
+  dap: number | null;
+  daysSinceVisit: number | null;
+  /** Dias sem visita (ou desde o plantio) quando passou de NO_VISIT_ALERT_DAYS no ciclo; senão null. */
+  noVisitDays: number | null;
+};
+
+/**
+ * Situação de visita do talhão na safra vigente. Regra única do painel e da agenda:
+ * talhão plantado (ou já visitado), ainda no ciclo e não maduro cobra visita depois de NO_VISIT_ALERT_DAYS.
+ */
+export function visitState(plotId: string, allSeasons: Season[], allVisits: Visit[], today: string): VisitState {
+  const now = new Date(`${today}T12:00:00`).getTime();
+  const seasons = allSeasons.filter((s) => s.plotId === plotId);
+  const season = latestSeason(seasons);
+  // Visita sem safra (backup antigo) conta para a safra vigente.
+  const visits = allVisits
+    .filter((v) => v.plotId === plotId && (seasons.some((s) => s.id === v.seasonId) ? v.seasonId : season?.id) === season?.id)
+    .sort(byDateDesc);
+  const lastVisit = visits[0];
+  const planted = season?.plantingDate && season.plantingDate <= today ? season.plantingDate : null;
+  const dap = planted ? daysSince(planted, now) : null;
+  const daysSinceVisit = lastVisit ? daysSince(lastVisit.date, now) : null;
+  const inCycle = (dap === null || dap <= MAX_CYCLE_DAYS) && lastVisit?.stage !== "R8";
+  const reference = daysSinceVisit ?? dap;
+  const noVisitDays = inCycle && reference !== null && reference > NO_VISIT_ALERT_DAYS ? reference : null;
+  return { season, lastVisit, dap, daysSinceVisit, noVisitDays };
+}
+
 export function buildPanel(input: Input, today: string): { farms: FarmStatus[]; alerts: Alert[] } {
   const now = new Date(`${today}T12:00:00`).getTime();
   const findingsByVisit = new Map<string, Finding[]>();
@@ -76,21 +107,8 @@ export function buildPanel(input: Input, today: string): { farms: FarmStatus[]; 
       .sort((a, b) => a.name.localeCompare(b.name, "pt-BR", { numeric: true }));
 
     const statuses = plots.map((plot): PlotStatus => {
-      const seasons = input.seasons.filter((s) => s.plotId === plot.id);
-      const season = latestSeason(seasons);
-      // Visita sem safra (backup antigo) conta para a safra vigente.
-      const visits = input.visits
-        .filter((v) => v.plotId === plot.id && (seasons.some((s) => s.id === v.seasonId) ? v.seasonId : season?.id) === season?.id)
-        .sort(byDateDesc);
-      const lastVisit = visits[0];
-      const planted = season?.plantingDate && season.plantingDate <= today ? season.plantingDate : null;
-      const dap = planted ? daysSince(planted, now) : null;
-      const daysSinceVisit = lastVisit ? daysSince(lastVisit.date, now) : null;
-
-      // Talhão plantado (ou já visitado), ainda no ciclo e não maduro: cobra visita.
-      const inCycle = (dap === null || dap <= MAX_CYCLE_DAYS) && lastVisit?.stage !== "R8";
-      const reference = daysSinceVisit ?? dap;
-      if (inCycle && reference !== null && reference > NO_VISIT_ALERT_DAYS) {
+      const { season, lastVisit, dap, daysSinceVisit, noVisitDays } = visitState(plot.id, input.seasons, input.visits, today);
+      if (noVisitDays !== null) {
         alerts.push({
           kind: "no-visit",
           plotId: plot.id,
@@ -98,7 +116,7 @@ export function buildPanel(input: Input, today: string): { farms: FarmStatus[]; 
           plotName: plot.name,
           text: lastVisit ? `Sem visita há ${daysSinceVisit} dias` : `Nenhuma visita desde o plantio (${dap} dias)`,
           href: `/talhao?id=${plot.id}`,
-          weight: 100 + reference,
+          weight: 100 + noVisitDays,
         });
       }
 

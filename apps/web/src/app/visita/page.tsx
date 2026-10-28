@@ -4,14 +4,17 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
-import { Bug, CircleHelp, ClipboardList, Microscope, Sprout, type LucideIcon } from "lucide-react";
+import { Bug, CircleHelp, ClipboardList, MessageCircle, Microscope, Sprout, type LucideIcon } from "lucide-react";
 import { PhotoGallery } from "@/components/photo-viewer";
 import { Button, Card, Chip, Empty, LinkButton, PageSkeleton, SectionTitle } from "@/components/ui";
 import { toast } from "@/components/toaster";
 import { KIND_LABEL } from "@/lib/catalog";
+import { whatsappLink } from "@/lib/clients";
 import { alive, db, removeVisit, restoreRemoved, setFollowUpDone, type FindingKind } from "@/lib/db";
 import { formatDate, plotLabel } from "@/lib/format";
+import { authorFromProfile, getProfile, signatureLines } from "@/lib/profile";
 import { daysSince, latestSeason } from "@/lib/season";
+import { visitReportText } from "@/lib/visit-report";
 
 export default function VisitPage() {
   return (
@@ -37,18 +40,23 @@ function Visit() {
   const data = useLiveQuery(async () => {
     const visit = await db.visits.get(id);
     if (!visit || visit.deletedAt) return { visit: null };
-    const [farm, plot, seasons, findings, photos] = await Promise.all([
+    const [farm, plot, seasons, findings, photos, profile] = await Promise.all([
       db.farms.get(visit.farmId),
       db.plots.get(visit.plotId),
       db.seasons.where("plotId").equals(visit.plotId).toArray(),
       db.findings.where("visitId").equals(id).toArray(),
       db.photos.where("visitId").equals(id).toArray(),
+      getProfile(),
     ]);
+    const client = farm?.clientId ? await db.clients.get(farm.clientId) : undefined;
     const liveSeasons = alive(seasons);
     return {
       visit,
       farm,
       plot,
+      client: client && !client.deletedAt ? client : undefined,
+      // Visitas anteriores ao perfil não têm autor gravado: assina quem usa o aparelho hoje.
+      author: visit.author ?? authorFromProfile(profile),
       // Visitas de backups antigos não têm safra: usa a vigente.
       season: liveSeasons.find((s) => s.id === visit.seasonId) ?? latestSeason(liveSeasons),
       findings: alive(findings).sort((a, b) => a.createdAt - b.createdAt),
@@ -67,31 +75,17 @@ function Visit() {
     );
   }
 
-  const { visit, farm, plot, season, findings, photos } = data;
+  const { visit, farm, plot, client, author, season, findings, photos } = data;
   const dap = season?.plantingDate
     ? daysSince(season.plantingDate, new Date(`${visit.date}T12:00:00`).getTime())
     : null;
-
-  function summary(): string {
-    const lines = [
-      `*Relatório de visita — ${farm?.name ?? "Fazenda"} · ${plot?.name ?? "Talhão"}*`,
-      `Data: ${formatDate(visit.date)} · Estágio: ${visit.stage}${dap !== null ? ` · ${dap} dias após o plantio` : ""}`,
-    ];
-    if (season?.cultivar) lines.push(`Cultivar: ${season.cultivar} (safra ${season.label})`);
-    if (findings.length) {
-      lines.push("", "*Achados*");
-      findings.forEach((f) =>
-        lines.push(`- ${KIND_LABEL[f.kind]}: ${f.name}${f.amount ? ` — ${f.amount}` : ""}${f.note ? ` (${f.note})` : ""}`),
-      );
-    }
-    if (visit.observations) lines.push("", "*Observações*", visit.observations);
-    if (visit.recommendation) lines.push("", "*Recomendação*", visit.recommendation);
-    if (visit.followUpDate) lines.push("", `Retorno combinado: ${formatDate(visit.followUpDate)}`);
-    return lines.join("\n");
-  }
+  const report = visitReportText({ visit, farm, plot, client, season, findings, dap, author });
+  const signature = signatureLines(author);
+  // Com o telefone do cliente, o relatório vai direto para a conversa com ele.
+  const wa = client ? whatsappLink(client.phone) : null;
 
   async function share() {
-    const text = summary();
+    const text = report;
     try {
       if (navigator.share) {
         await navigator.share({ text });
@@ -130,7 +124,7 @@ function Visit() {
         </p>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">{plotLabel(plot?.name)}</h1>
         <p className="mt-0.5 text-white/75 print:text-muted">
-          {[farm?.name ?? "Fazenda", farm?.owner, farm?.municipality].filter(Boolean).join(" · ")}
+          {[farm?.name ?? "Fazenda", client?.name || farm?.owner, farm?.municipality].filter(Boolean).join(" · ")}
         </p>
         <dl className="mt-4 grid grid-cols-2 gap-2">
           {[
@@ -147,8 +141,21 @@ function Visit() {
         </dl>
       </header>
 
+      {wa && client ? (
+        <a
+          href={`${wa}?text=${encodeURIComponent(report)}`}
+          target="_blank"
+          rel="noreferrer"
+          className="no-print inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-brand px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-strong active:scale-[0.98]"
+        >
+          <MessageCircle aria-hidden className="size-5 shrink-0" />
+          <span className="truncate">Enviar para {client.name} no WhatsApp</span>
+        </a>
+      ) : null}
       <div className="no-print grid grid-cols-3 gap-2">
-        <Button onClick={share}>Compartilhar</Button>
+        <Button variant={wa ? "secondary" : "primary"} onClick={share}>
+          Compartilhar
+        </Button>
         <Button variant="secondary" onClick={() => window.print()}>
           PDF
         </Button>
@@ -233,6 +240,26 @@ function Visit() {
           </Card>
         </section>
       ) : null}
+
+      {signature.length ? (
+        <section className="space-y-2">
+          <SectionTitle>Responsável pela visita</SectionTitle>
+          <Card className="print:border-0 print:p-0">
+            {signature.map((line, i) => (
+              <p key={line} className={i === 0 ? "font-semibold" : "text-sm text-muted"}>
+                {line}
+              </p>
+            ))}
+          </Card>
+        </section>
+      ) : (
+        <Card className="no-print flex flex-wrap items-center justify-between gap-3 border-dashed">
+          <p className="min-w-48 flex-1 text-sm text-muted">Preencha o seu perfil para o relatório sair com o seu nome e registro.</p>
+          <LinkButton href="/perfil" variant="secondary">
+            Meu perfil
+          </LinkButton>
+        </Card>
+      )}
 
       <div className="no-print pt-2">
         <Button variant="danger" className="w-full" onClick={remove}>

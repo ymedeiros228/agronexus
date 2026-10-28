@@ -40,7 +40,7 @@ Regra que vale para todas as telas: **número no painel só aparece se vier de d
 | Etapa | Entrega |
 |---|---|
 | 0 | Arrumar a casa: ADR 0008 e docs atualizados |
-| 1 | Base profissional do engenheiro: perfil e papéis, modo "vou a campo", carteira de clientes, agenda "Hoje", relatório da visita com identidade e responsável técnico |
+| 1 | ~~Base profissional do engenheiro: perfil e papéis, modo "vou a campo", carteira de clientes, agenda "Hoje", relatório da visita com identidade e responsável técnico~~ Feito em 28/10 (`/perfil`, `/clientes`, `/cliente`, `/agenda`; banco v7) |
 | 2 | Servidor (Supabase em conta própria do AgroNexus), login, envio automático quando houver sinal e publicação HTTPS (Vercel) |
 | 3 | Visita completa: tipos de visita, dados do plantio, contagem de estande |
 | 4 | Mapeamento por coordenadas: decimal, GMS, UTM SIRGAS 2000, WKT; tabela de vértices; exportar WKT (7 casas), GeoJSON e CSV; conversor e pontos |

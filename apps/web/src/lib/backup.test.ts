@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { exportBackup, importBackup } from "./backup";
 import { db, newBase } from "./db";
+import { emptyProfile, getProfile, saveProfile } from "./profile";
 
 beforeEach(async () => {
   await Promise.all(db.tables.map((t) => t.clear()));
@@ -108,6 +109,28 @@ describe("backup", () => {
     expect(await db.farms.get("f2")).toBeUndefined();
     expect((await db.sales.get("s1"))?.seasonLabel).toBe("2026/27");
     expect(await db.sales.get("s2")).toBeUndefined();
+  });
+
+  it("leva clientes e o perfil; o perfil só entra em aparelho sem perfil", async () => {
+    await db.clients.add({ ...newBase(), id: "c1", name: "Maria", phone: "99", municipality: "", notes: "" });
+    await saveProfile({ ...emptyProfile(), name: "Ana" });
+    const file = await asFile(await exportBackup());
+    await Promise.all(db.tables.map((t) => t.clear()));
+
+    expect(await importBackup(file)).toBe(1);
+    expect((await db.clients.get("c1"))?.phone).toBe("99");
+    expect((await getProfile())?.name).toBe("Ana");
+
+    await saveProfile({ ...emptyProfile(), name: "Outra pessoa" });
+    await importBackup(file);
+    expect((await getProfile())?.name).toBe("Outra pessoa");
+  });
+
+  it("backup de antes da carteira: o produtor da fazenda vira cliente", async () => {
+    const backup = { app: "agronexus", version: 1, farms: [{ id: "f1", updatedAt: 1, name: "Boa", owner: "Maria" }] };
+    await importBackup(new File([JSON.stringify(backup)], "b.json"));
+    const farm = await db.farms.get("f1");
+    expect((await db.clients.get(farm!.clientId!))?.name).toBe("Maria");
   });
 
   it("recusa arquivo que não é backup", async () => {

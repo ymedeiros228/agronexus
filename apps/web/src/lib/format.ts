@@ -5,6 +5,17 @@ export function todayISO(): string {
   return `${d.getFullYear()}-${m}-${day}`;
 }
 
+/** Saudação pela hora do aparelho. */
+export function greeting(hour = new Date().getHours()): string {
+  return hour < 12 ? "Bom dia" : hour < 18 ? "Boa tarde" : "Boa noite";
+}
+
+/** "Sábado, 4 de outubro" */
+export function todayLong(): string {
+  const s = new Date().toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long" });
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
 export function formatDate(iso: string): string {
   const [y, m, d] = iso.split("-");
   return `${d}/${m}/${y}`;

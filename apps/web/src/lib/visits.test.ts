@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { alive, db, newBase } from "./db";
+import { saveProfile, emptyProfile } from "./profile";
 import { createVisit, updateVisit, type VisitInput } from "./visits";
 
 let clock = 1_000;
@@ -64,6 +65,29 @@ describe("createVisit", () => {
     expect(findings.map((f) => f.name).sort()).toEqual(["Ferrugem-asiática", "Percevejo-marrom"]);
     const photos = await db.photos.where("visitId").equals(id).toArray();
     expect(photos).toHaveLength(2);
+    expect(visit?.author).toBeUndefined();
+  });
+
+  it("grava quem registrou, copiado do perfil", async () => {
+    await saveProfile({ ...emptyProfile(), name: "Ana Lima", role: "estagiario", supervisorName: "João Silva" });
+    const id = await createVisit(input());
+    const visit = await db.visits.get(id);
+    expect(visit?.author).toMatchObject({ name: "Ana Lima", role: "estagiario", supervisorName: "João Silva" });
+  });
+
+  it("voltar ao talhão dá por feitos os retornos pendentes de antes, só daquele talhão", async () => {
+    setNow(2_000);
+    const old = await createVisit(input({ date: "2026-10-03", followUpDate: "2026-10-10" }));
+    const other = await createVisit(input({ plotId: "p2", date: "2026-10-03", followUpDate: "2026-10-10" }));
+    const later = await createVisit(input({ date: "2026-10-20", followUpDate: "2026-10-30" }));
+    setNow(3_000);
+    // Visita lançada com data anterior (esquecida no caderno) não fecha o retorno de uma visita mais nova.
+    await createVisit(input({ date: "2026-10-15", followUpDate: null }));
+    const [a, b, c] = await db.visits.bulkGet([old, other, later]);
+    expect(a?.followUpDone).toBe(true);
+    expect(a?.updatedAt).toBe(2_000);
+    expect(b?.followUpDone).toBe(false);
+    expect(c?.followUpDone).toBe(false);
   });
 });
 

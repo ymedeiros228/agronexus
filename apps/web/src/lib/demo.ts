@@ -1,5 +1,6 @@
 import { db, getMeta, setMeta } from "./db";
 import type {
+  Client,
   Expense,
   Farm,
   Finding,
@@ -30,6 +31,7 @@ export const DEMO_PREFIX = "demo-";
 const DEMO_KEY = "demoLoaded";
 
 export type DemoData = {
+  clients: Client[];
   farms: Farm[];
   plots: Plot[];
   seasons: Season[];
@@ -44,6 +46,7 @@ export type DemoData = {
 };
 
 const TABLES = [
+  "clients",
   "farms",
   "plots",
   "seasons",
@@ -58,7 +61,7 @@ const TABLES = [
 ] as const satisfies readonly (keyof DemoData)[];
 
 /** Campos que apontam para outro registro: o que o usuário criou dentro do exemplo sai junto. */
-const REFS = ["farmId", "plotId", "seasonId", "visitId", "supplyId", "operationId"] as const;
+const REFS = ["clientId", "farmId", "plotId", "seasonId", "visitId", "supplyId", "operationId"] as const;
 
 const KM_LNG = 110.3;
 const KM_LAT = 110.57;
@@ -312,9 +315,13 @@ export function buildDemo(now: number = Date.now()): DemoData {
   }));
 
   return {
+    clients: [
+      { ...base("c1"), name: "João Ribeiro", phone: "(99) 98877-1020", municipality: "Balsas - MA", notes: "" },
+      { ...base("c2"), name: "Maria Alves", phone: "(99) 99102-3344", municipality: "Tasso Fragoso - MA", notes: "" },
+    ],
     farms: [
-      { ...base("f1"), name: "Fazenda Santa Luzia", municipality: "Balsas - MA", owner: "João Ribeiro" },
-      { ...base("f2"), name: "Sítio Boa Esperança", municipality: "Tasso Fragoso - MA", owner: "Maria Alves" },
+      { ...base("f1"), name: "Fazenda Santa Luzia", municipality: "Balsas - MA", owner: "João Ribeiro", clientId: ref("c1") },
+      { ...base("f2"), name: "Sítio Boa Esperança", municipality: "Tasso Fragoso - MA", owner: "Maria Alves", clientId: ref("c2") },
     ],
     plots,
     seasons,

@@ -5,11 +5,13 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState, type FormEvent } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { ChevronRight, CloudRain, X } from "lucide-react";
+import { ClientField } from "@/components/client-bits";
 import { ShapeThumb } from "@/components/map-bits";
 import { VisitRow } from "@/components/visit-row";
 import { Button, Card, Chip, Empty, Field, inputClass, LinkButton, PageSkeleton, PageTitle, rejectField, SectionTitle } from "@/components/ui";
 import { toast } from "@/components/toaster";
-import { alive, db, newBase, removeFarm, removeRainfall, updateFarm, restoreRemoved } from "@/lib/db";
+import { editFarm } from "@/lib/clients";
+import { alive, db, newBase, removeFarm, removeRainfall, restoreRemoved } from "@/lib/db";
 import { formatDate, plotLabel, todayISO } from "@/lib/format";
 import { formatNumberBR, parseNumberBR, seasonLabels } from "@/lib/operations";
 import { SEASON_LABEL_PATTERN, daysSince, latestSeason, normalizeSeasonLabel, seasonLabelFor } from "@/lib/season";
@@ -30,10 +32,11 @@ function Farm() {
 
   const data = useLiveQuery(async () => {
     const farm = await db.farms.get(id);
-    const [plots, visits, rain] = await Promise.all([
+    const [plots, visits, rain, clients] = await Promise.all([
       db.plots.where("farmId").equals(id).toArray(),
       db.visits.where("farmId").equals(id).reverse().sortBy("date"),
       db.rainfall.where("farmId").equals(id).reverse().sortBy("date"),
+      db.clients.orderBy("name").toArray(),
     ]);
     const livePlots = alive(plots);
     const seasons = alive(await db.seasons.where("plotId").anyOf(livePlots.map((p) => p.id)).toArray());
@@ -43,6 +46,7 @@ function Farm() {
       seasons,
       visits: alive(visits),
       rain: alive(rain),
+      clients: alive(clients),
     };
   }, [id]);
 
@@ -87,10 +91,10 @@ function Farm() {
     const f = new FormData(e.currentTarget);
     const name = String(f.get("name") ?? "").trim();
     if (!name) return;
-    await updateFarm(id, {
+    await editFarm(id, {
       name,
-      municipality: String(f.get("municipality") ?? "").trim(),
-      owner: String(f.get("owner") ?? "").trim(),
+      municipality: String(f.get("municipality") ?? ""),
+      clientName: String(f.get("client") ?? ""),
     });
     setEditOpen(false);
     toast("Fazenda atualizada.");
@@ -117,7 +121,8 @@ function Farm() {
     );
   }
 
-  const { farm, plots, seasons, visits, rain } = data;
+  const { farm, plots, seasons, visits, rain, clients } = data;
+  const client = clients.find((c) => c.id === farm.clientId);
   const plotName = new Map(plots.map((p) => [p.id, p.name]));
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - 30);
@@ -130,9 +135,15 @@ function Farm() {
   return (
     <>
       <div>
-        <Link href="/fazendas" className="text-sm text-brand">
-          ← Fazendas
-        </Link>
+        {client ? (
+          <Link href={`/cliente?id=${client.id}`} className="text-sm text-brand">
+            ← {client.name}
+          </Link>
+        ) : (
+          <Link href="/fazendas" className="text-sm text-brand">
+            ← Fazendas
+          </Link>
+        )}
       </div>
       <PageTitle
         title={farm.name}
@@ -153,9 +164,7 @@ function Farm() {
             <Field label="Município">
               <input name="municipality" defaultValue={farm.municipality} className={inputClass} />
             </Field>
-            <Field label="Produtor / responsável">
-              <input name="owner" defaultValue={farm.owner} className={inputClass} />
-            </Field>
+            <ClientField clients={clients} defaultValue={client?.name ?? farm.owner} />
             <Button type="submit" className="w-full">
               Salvar fazenda
             </Button>
