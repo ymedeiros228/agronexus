@@ -15,6 +15,13 @@ O app funciona sem servidor: tudo fica no aparelho. Com a conta na nuvem ligada,
   - Os ganchos em `db.ts` marcam como pendente tudo o que é gravado.
 - A lógica do SQL foi testada em 28/10/2026 num Postgres local (PGlite), com 31 verificações: conflito, reenvio, isolamento entre contas, leitor, visitante e fotos.
 
+## Situação (28/10/2026)
+- Projeto **agronexus** criado na organização AgroNexus (plano grátis), região **South America (São Paulo)**, ref `rwqcxbedhibdqcctkuck`.
+- As 3 migrações foram aplicadas pelo editor de SQL do painel e registradas em `supabase_migrations.schema_migrations`. O Security Advisor ficou sem erros, avisos ou sugestões.
+- Conferido sem login: ler `registros` e `contas` e chamar `enviar_registros` dá "permission denied".
+- Login: Site URL `http://localhost:3100`, Redirect URL `http://localhost:3100/**`. **Ao publicar na Vercel, trocar** pelo endereço publicado.
+- Opções escolhidas na criação: "Automatically expose new tables" desligada e "Enable automatic RLS" ligada.
+
 ## Ligar a nuvem (uma vez)
 1. Criar a conta no Supabase **com o e-mail do AgroNexus** e o projeto `agronexus`, na região **South America (São Paulo)**. A região não muda depois.
 2. Dar acesso ao Claude Code de uma das duas formas: conectar o plugin do Supabase a essa conta ou rodar `! npx supabase login` no terminal. Ele aplica a migração e confere os avisos de segurança (`get_advisors`).
