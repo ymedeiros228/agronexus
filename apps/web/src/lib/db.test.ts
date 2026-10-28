@@ -52,5 +52,11 @@ describe("migração v1 → v2", () => {
     expect(f1?.updatedAt).toBe(1);
     const clients = await db.clients.toArray();
     expect(clients.map((c) => [c.name, c.municipality])).toEqual([["João Ribeiro", "Balsas"]]);
+
+    // v8: tudo o que já existia fica pendente, para subir no primeiro login.
+    expect(await db.farms.where("_pendente").equals(1).count()).toBe(3);
+    expect(await db.visits.where("_pendente").equals(1).count()).toBe(2);
+    expect(await db.clients.where("_pendente").equals(1).count()).toBe(1);
+    expect(f1?._pendente).toBe(1);
   });
 });

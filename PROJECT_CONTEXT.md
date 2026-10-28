@@ -6,7 +6,7 @@ Fase 1 em andamento. App web (PWA) em `apps/web`, local-first (dados no IndexedD
 Rodar localmente (a partir de `apps/web`):
 - Desenvolvimento: `npm run dev`
 - Produção (necessária para o service worker): `npm run build` e depois `npx next start -p 3100`
-- Conferência: `npx tsc --noEmit`, `npx eslint`, `npm test` (Vitest, 135 testes)
+- Conferência: `npx tsc --noEmit`, `npx eslint`, `npm test` (Vitest, 146 testes)
 
 ## Concluído
 - Repositório, docs, Plano Mestre, ADRs 0001 a 0008, roadmap por tela.
@@ -17,6 +17,7 @@ Rodar localmente (a partir de `apps/web`):
   - **Meu perfil** (`/perfil`, gravado em `meta`): nome, função, registro (CREA/CFTA conforme a função), empresa, telefone e responsável técnico (obrigatório para estagiário e monitor). Prévia da assinatura do relatório.
   - **Carteira de clientes** (`/clientes`, `/cliente?id=`): busca por cliente, fazenda ou município (sem acento), WhatsApp e ligar, última visita e retornos atrasados; ficha com fazendas, área, últimas visitas, "Nova visita"; remover leva as fazendas com "Desfazer". Fazenda tem campo "Cliente" (escolhe da lista ou cria na hora). `farm.owner` continua gravado com o nome do cliente (backup, CSV).
   - **Agenda "Hoje"** (`/` no modo campo e `/agenda`): atrasados, hoje, sem visita (mesma regra do painel, `visitState`) e próximos 7 dias; cada talhão uma vez, com cliente, fazenda, DAP, motivo, "Visitar" (abre a visita já no talhão) e "Rota". Primeiros passos numerados quando não há fazenda.
+  - **Conta na nuvem (pronta no código, desligada até existir o projeto Supabase)**: toda gravação marca o registro como pendente (ganchos do Dexie em `db.ts`, sem mexer nas telas); `src/lib/sync/engine.ts` recebe (sem pisar no que ainda não subiu) e envia (foto antes do registro; só tira a pendência se o registro não mudou durante o envio; o que o servidor recusa por ter edição mais nova substitui a cópia daqui); dispara ao abrir, ao voltar para o app, quando o sinal volta, a cada minuto e 2 s depois de gravar (`components/cloud-sync.tsx`). Tela `/entrar` (entrar, criar conta, esqueci a senha, enviar agora, sair) e indicador no topo ("Salvo na nuvem", "3 para enviar", "Sem internet · 3 esperando sinal", "Não enviou · tentar de novo"). Exemplo nunca sobe. Sair só com tudo enviado e limpa o aparelho. Servidor em `supabase/` (ver `supabase/README.md`). Sem as variáveis `NEXT_PUBLIC_SUPABASE_*` o app funciona como antes.
   - **Relatório com identidade**: a visita grava o autor (cópia do perfil); o relatório (tela, PDF e WhatsApp) traz o produtor e termina com nome, função, registro, empresa, telefone e "Sob supervisão de Eng. Agr. …". Com o telefone do cliente, botão "Enviar para … no WhatsApp" já abre a conversa com ele. Nova visita no talhão marca como feitos os retornos pendentes anteriores.
   - **Fazendas e talhões**: cadastrar, editar, remover (exclusão lógica em cascata). Página do talhão com safra atual, nova safra, achados da safra, operações, linha do tempo e safras anteriores.
   - **Monitoramento**: visita com estágio, achados, fotos com diagnóstico e GPS, recomendação, retorno; editar visita; relatório (WhatsApp/PDF); tela de ocorrências e lista de visitas.
@@ -27,7 +28,8 @@ Rodar localmente (a partir de `apps/web`):
   - **Financeiro da safra**: vendas (sacas, preço líquido, comprador), despesas gerais por categoria, receita, custo total (operações + despesas), margem e margem/ha, ponto de equilíbrio (sc/ha ao preço médio e R$/sc com a produtividade), grão produzido/vendido/a vender, composição do custo. Entra no painel (custo/ha), no relatório e na comparação entre safras.
   - **Mapa de talhões** (com satélite da Esri guardado no aparelho para abrir offline): contorno caminhando com GPS (filtra precisão pior que 25 m e pontos a menos de 5 m; tela fica ligada onde o navegador deixa), desenhado com toques sobre o satélite ou importado de KML/KMZ/GeoJSON; área e perímetro pelo contorno, botão para usar como área do talhão; mapa da fazenda colorido pela situação; rota até o talhão (abre o app de mapas); exportação KML.
   - **Dados**: backup JSON de todas as tabelas (lista única em `backup.ts`), restauração que só mescla, lembrete de backup no painel, planilhas CSV (visitas, operações com insumos, estoque, vendas e despesas), armazenamento persistente.
-  - Banco local na versão 7 (v2: safra na visita, tabela meta; v3: operações; v4: insumos e movimentos de estoque; v5: vendas e despesas; v6: rótulo da safra padronizado; v7: tabela `clients`, um cliente por produtor distinto das fazendas). Migrações até a v5 verificadas no navegador com dados de teste; v6 e v7 nos testes.
+  - Banco local na versão 8 (v2: safra na visita, tabela meta; v3: operações; v4: insumos e movimentos de estoque; v5: vendas e despesas; v6: rótulo da safra padronizado; v7: tabela `clients`, um cliente por produtor distinto das fazendas; v8: índice `_pendente` em todas as tabelas de dados, tudo o que existia fica pendente para subir no primeiro login). Migrações até a v5 verificadas no navegador com dados de teste; v6 a v8 nos testes.
+  - Backup não leva o estado de envio (`_pendente`, `_sync`): o que é restaurado fica pendente no aparelho que restaurou.
   - Rótulo da safra sempre no formato `2026/27` (aceita digitar `2026/2027`, `26/27`, `2026-27`), para vendas e despesas não se dividirem em safras diferentes.
   - Áreas e chuva digitadas seguem o padrão brasileiro (`parseNumberBR`).
   - Exclusão em cascata completa: visita leva achados e fotos; talhão leva safras, visitas e operações; fazenda leva tudo.
@@ -62,7 +64,7 @@ Rodar localmente (a partir de `apps/web`):
 
 ## Pendente
 - **Hospedagem de teste (HTTPS)**: necessária para testar no celular e o offline real (o navegador embutido não registra service worker). Opções levantadas em 2026-10-04, aguardando escolha da fundadora.
-- **Etapa 2 do plano**: servidor (Supabase, conta nova só do AgroNexus, região São Paulo), login, envio automático quando houver sinal e publicação na Vercel. Depende de o Yuri criar a conta e o projeto.
+- **Etapa 2 do plano, o que falta**: criar a conta Supabase (nova, só do AgroNexus, região São Paulo) e o projeto, aplicar `supabase/migrations/`, pôr as variáveis na Vercel e publicar; depois o teste real com dois aparelhos (passo a passo em `supabase/README.md`). Depende de o Yuri criar a conta.
 - Orçamento mensal (não informado). Nome/marca/domínio/INPI.
 - Testadores reais (pelo menos 3). A irmã da fundadora (estagiária de agronomia) é a porta de entrada para produtores.
 - `npm audit`: 5 vulnerabilidades altas na cadeia do ESLint (só desenvolvimento); corrigir com `--force` rebaixaria o eslint-config-next.

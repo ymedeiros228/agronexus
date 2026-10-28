@@ -13,6 +13,10 @@ type Base = {
   createdAt: number;
   updatedAt: number;
   deletedAt?: number;
+  /** 1 = mudou neste aparelho e ainda não subiu para a nuvem. Posto pelos ganchos do banco (`markPendingOnWrite`). */
+  _pendente?: 0 | 1;
+  /** `servidor_em` da última versão que veio ou foi aceita pela nuvem. Só a sincronização grava. */
+  _sync?: string;
 };
 
 /** Cliente da carteira do engenheiro: o produtor dono de uma ou mais fazendas. */
@@ -280,7 +284,70 @@ class AgroDB extends Dexie {
         // Migração não é edição do usuário: updatedAt das fazendas fica como estava.
         for (const [farmId, clientId] of links) await tx.table<Farm>("farms").update(farmId, { clientId });
       });
+    // v8: envio para a nuvem. Índice da pendência em todas as tabelas de dados; o que já existia
+    // fica pendente, para subir inteiro no primeiro login.
+    this.version(8)
+      .stores({
+        farms: "id, name, clientId, updatedAt, _pendente",
+        plots: "id, farmId, updatedAt, _pendente",
+        seasons: "id, plotId, updatedAt, _pendente",
+        visits: "id, farmId, plotId, seasonId, date, updatedAt, _pendente",
+        findings: "id, visitId, updatedAt, _pendente",
+        photos: "id, visitId, updatedAt, _pendente",
+        rainfall: "id, farmId, date, updatedAt, _pendente",
+        operations: "id, farmId, plotId, seasonId, date, status, updatedAt, _pendente",
+        supplies: "id, name, category, updatedAt, _pendente",
+        stockMoves: "id, supplyId, operationId, date, updatedAt, _pendente",
+        sales: "id, seasonLabel, date, updatedAt, _pendente",
+        expenses: "id, seasonLabel, date, updatedAt, _pendente",
+        clients: "id, name, updatedAt, _pendente",
+      })
+      .upgrade(async (tx) => {
+        for (const t of SYNCED_TABLES) await tx.table(t).toCollection().modify({ _pendente: 1 });
+      });
+    markPendingOnWrite(this);
   }
+}
+
+/** Tabelas que vão para a nuvem (e para o backup, além do perfil). `meta` é do aparelho e fica fora. */
+export const SYNCED_TABLES = [
+  "farms",
+  "plots",
+  "seasons",
+  "visits",
+  "findings",
+  "photos",
+  "rainfall",
+  "operations",
+  "supplies",
+  "stockMoves",
+  "sales",
+  "expenses",
+  "clients",
+] as const;
+export type SyncedTable = (typeof SYNCED_TABLES)[number];
+
+/**
+ * Toda gravação marca o registro como pendente de envio, sem cada tela precisar lembrar.
+ * Só a sincronização grava `_sync` (o carimbo do servidor): gravação que traz carimbo novo veio
+ * da nuvem ou acabou de subir, e não marca. Backup e exemplo chegam sem esses campos.
+ */
+function markPendingOnWrite(db: Dexie) {
+  for (const name of SYNCED_TABLES) {
+    const table = db.table(name);
+    table.hook("creating", (_key, obj: Base) => {
+      if (obj._sync === undefined) obj._pendente = 1;
+    });
+    table.hook("updating", (mods: Partial<Base>) => (mods._sync !== undefined ? undefined : { _pendente: 1 }));
+  }
+}
+
+/** Tira os campos da sincronização: backup e exemplo não levam o estado de envio deste aparelho. */
+export function withoutSyncFields<T extends object>(row: T): T {
+  const { _pendente, _sync, ...rest } = row as T & Pick<Base, "_pendente" | "_sync">;
+  void _pendente;
+  void _sync;
+  return rest as T;
 }
 
 /** Nome para comparar clientes: sem diferença de maiúscula, acento ou espaço sobrando. */

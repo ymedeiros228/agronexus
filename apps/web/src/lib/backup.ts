@@ -1,5 +1,5 @@
 import { linkOwnersToClients } from "./clients";
-import { db, setMeta, type Photo } from "./db";
+import { db, setMeta, withoutSyncFields, type Photo } from "./db";
 import { JsonStreamError, readJsonObject } from "./json-stream";
 import { PROFILE_KEY, getProfile, type Profile } from "./profile";
 import { normalizeSeasonLabel } from "./season";
@@ -62,14 +62,14 @@ export async function exportBackup(): Promise<Blob> {
   const parts: (string | Blob)[] = [JSON.stringify(header).slice(0, -1)];
   const profile = await getProfile();
   if (profile) parts.push(`,"profile":${JSON.stringify(profile)}`);
-  for (const t of TABLES) parts.push(`,${JSON.stringify(t)}:${JSON.stringify(await db.table(t).toArray())}`);
+  for (const t of TABLES) parts.push(`,${JSON.stringify(t)}:${JSON.stringify((await db.table(t).toArray()).map(withoutSyncFields))}`);
   parts.push(`,"photos":[`);
   const ids = await db.photos.toCollection().primaryKeys();
   let first = true;
   for (const id of ids) {
     const p = await db.photos.get(id);
     if (!p) continue;
-    parts.push(new Blob([`${first ? "" : ","}${JSON.stringify({ ...p, blob: await blobToDataUrl(p.blob) })}`]));
+    parts.push(new Blob([`${first ? "" : ","}${JSON.stringify({ ...withoutSyncFields(p), blob: await blobToDataUrl(p.blob) })}`]));
     first = false;
   }
   parts.push("]}");
@@ -132,7 +132,10 @@ function normalizeLabels(row: Row, table: TableName | "photos"): Row {
 /** Grava só o que é novo ou mais recente que o registro que já está no aparelho. */
 async function merge(rows: unknown, table: TableName | "photos"): Promise<number> {
   if (!Array.isArray(rows)) return 0;
-  const valid = rows.filter((r): r is Row => isRow(r) && hasRequired(r, table)).map((r) => normalizeLabels(r, table));
+  // O estado de envio é de cada aparelho: o que vem do arquivo fica pendente aqui.
+  const valid = rows
+    .filter((r): r is Row => isRow(r) && hasRequired(r, table))
+    .map((r) => withoutSyncFields(normalizeLabels(r, table)));
   const existing: (Row | undefined)[] = await db.table(table).bulkGet(valid.map((r) => r.id));
   const toWrite = valid.filter((r, i) => !existing[i] || existing[i]!.updatedAt < r.updatedAt);
   if (toWrite.length) await db.table(table).bulkPut(toWrite);

@@ -8,6 +8,7 @@ import {
   CalendarCheck,
   CalendarRange,
   ClipboardList,
+  Cloud,
   Contact,
   HardDrive,
   LayoutDashboard,
@@ -26,6 +27,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import type { Mode } from "@/lib/profile";
+import { CloudSync, useCloudStatus } from "./cloud-sync";
 import { DemoBanner } from "./demo-bits";
 import { OnlineBadge } from "./online-badge";
 import { useMode } from "./profile-bits";
@@ -101,6 +103,7 @@ const MONITORING: NavItem = {
   icon: Bug,
   match: (p) => p.startsWith("/visita"),
 };
+const CLOUD: NavItem = { href: "/entrar", label: "Conta na nuvem", short: "Nuvem", icon: Cloud, match: (p) => p.startsWith("/entrar") };
 const DATA: NavItem = { href: "/dados", label: "Dados e backup", short: "Dados", icon: HardDrive, match: (p) => p.startsWith("/dados") };
 const VISITS: NavItem = { ...MONITORING, label: "Visitas", short: "Visitas", icon: ClipboardList };
 
@@ -141,15 +144,15 @@ const NEW_CLIENT: Action = {
  */
 const MENUS: Record<Mode, { nav: NavItem[]; bar: (NavItem | null)[]; more: NavItem[]; actions: Action[] }> = {
   campo: {
-    nav: [TODAY, CLIENTS, VISITS, FARMS, MAP, FIELD_PANEL, SEASONS, OPERATIONS, SUPPLIES, FINANCE, PROFILE, DATA],
+    nav: [TODAY, CLIENTS, VISITS, FARMS, MAP, FIELD_PANEL, SEASONS, OPERATIONS, SUPPLIES, FINANCE, PROFILE, CLOUD, DATA],
     bar: [TODAY, CLIENTS, null, VISITS],
-    more: [FARMS, MAP, FIELD_PANEL, SEASONS, OPERATIONS, SUPPLIES, FINANCE, PROFILE, DATA],
+    more: [FARMS, MAP, FIELD_PANEL, SEASONS, OPERATIONS, SUPPLIES, FINANCE, PROFILE, CLOUD, DATA],
     actions: [NEW_VISIT, NEW_CLIENT, NEW_OPERATION],
   },
   gestao: {
-    nav: [PANEL, FARMS, MAP, SEASONS, OPERATIONS, SUPPLIES, FINANCE, MONITORING, AGENDA, CLIENTS, PROFILE, DATA],
+    nav: [PANEL, FARMS, MAP, SEASONS, OPERATIONS, SUPPLIES, FINANCE, MONITORING, AGENDA, CLIENTS, PROFILE, CLOUD, DATA],
     bar: [PANEL, OPERATIONS, null, MONITORING],
-    more: [FARMS, MAP, SEASONS, SUPPLIES, FINANCE, AGENDA, CLIENTS, PROFILE, DATA],
+    more: [FARMS, MAP, SEASONS, SUPPLIES, FINANCE, AGENDA, CLIENTS, PROFILE, CLOUD, DATA],
     actions: [NEW_VISIT, NEW_OPERATION, NEW_SUPPLY],
   },
 };
@@ -224,6 +227,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [sheet, setSheet] = useState<"novo" | "mais" | null>(null);
   const mode = useMode();
+  const { linked } = useCloudStatus();
   const wide = WIDE.includes(pathname);
   // Enquanto o modo não foi lido, o menu fica vazio (evita piscar o menu do outro modo).
   const menu = mode ? MENUS[mode] : { nav: [], bar: [undefined, undefined, null, undefined], more: [], actions: [] };
@@ -271,7 +275,11 @@ export function AppShell({ children }: { children: ReactNode }) {
         </nav>
         <div className="mt-4 space-y-2 px-2 text-xs text-sidebar-muted">
           <OnlineBadge />
-          <p>Seus dados ficam neste aparelho. Faça backup em “Dados e backup”.</p>
+          <p>
+            {linked
+              ? "Tudo fica salvo neste aparelho e sobe para a sua conta quando há sinal."
+              : "Seus dados ficam neste aparelho. Faça backup em “Dados e backup”."}
+          </p>
         </div>
       </aside>
 
@@ -291,6 +299,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       </main>
 
       <Toaster />
+      <CloudSync />
 
       {/* Celular: navegação inferior */}
       <nav

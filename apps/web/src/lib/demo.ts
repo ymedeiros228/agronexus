@@ -347,6 +347,11 @@ export async function loadDemo(now: number = Date.now()) {
 
 const isDemo = (v: unknown) => typeof v === "string" && v.startsWith(DEMO_PREFIX);
 
+/** Registro do exemplo ou criado dentro dele (visita num talhão de exemplo): nunca vai para a nuvem. */
+export function isDemoRow(r: Record<string, unknown>): boolean {
+  return isDemo(r.id) || REFS.some((k) => isDemo(r[k]));
+}
+
 /**
  * Apaga o exemplo de verdade (não é exclusão lógica: nunca foi dado do produtor),
  * junto com o que foi criado dentro dele, como uma visita nova num talhão de exemplo.
@@ -356,7 +361,7 @@ export async function removeDemo() {
     for (const t of [...TABLES, "photos"] as const) {
       await db
         .table(t)
-        .filter((r: Record<string, unknown>) => isDemo(r.id) || REFS.some((k) => isDemo(r[k])))
+        .filter(isDemoRow)
         .delete();
     }
     // Fotos e achados de visitas novas que caíram junto com a visita.
