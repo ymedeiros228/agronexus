@@ -5,6 +5,17 @@ import { fitFontSize, plotShortName } from "@/lib/format";
 import { formatNumberBR } from "@/lib/operations";
 import type { Alert, PlotStatus } from "@/lib/panel";
 
+/** Desenho de um contorno, para conferir a forma antes de salvar. */
+export function ShapePreview({ ring, className = "h-40" }: { ring: LngLat[]; className?: string }) {
+  const [shape] = projectShapes([ring], 300, 180, 12);
+  if (!shape) return null;
+  return (
+    <svg viewBox="0 0 300 180" className={`w-full rounded-xl bg-brand-soft/50 ${className}`} role="img" aria-label="Contorno do talhão">
+      <path d={shape.path} className="fill-brand/25 stroke-brand" strokeWidth={2} strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 export type Tone = "danger" | "warn" | "ok" | "none";
 
 export const TONE: Record<Tone, { shape: string; dot: string; label: string }> = {

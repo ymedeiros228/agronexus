@@ -3,9 +3,14 @@
 import Link from "next/link";
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
-import { Footprints, MapPinned, Navigation, Pointer, Upload } from "lucide-react";
+import { Copy, Download, Footprints, Grid3x3, MapPinned, Navigation, Pointer, Upload } from "lucide-react";
+import { CoordsEditor } from "@/components/coords-editor";
+import { ShapePreview } from "@/components/map-bits";
 import { TapDrawer } from "@/components/tap-map";
+import { toast } from "@/components/toaster";
 import { Button, Card, SectionTitle } from "@/components/ui";
+import { toGeoJson, toWkt, VERTEX_HEADER, vertexRows } from "@/lib/coords";
+import { toCsv } from "@/lib/csv";
 import { alive, db, updatePlot, type Plot } from "@/lib/db";
 import {
   addTrackPoint,
@@ -14,30 +19,21 @@ import {
   parseShapes,
   perimeterM,
   polygonAreaHa,
-  projectShapes,
+  toKml,
   type ImportedShape,
   type LngLat,
 } from "@/lib/geo";
 import { readShapeText } from "@/lib/kmz";
 import { formatNumberBR } from "@/lib/operations";
+import { fileSlug, saveFile } from "@/lib/save-file";
 
 /** Ponto com precisão pior que isso não entra no contorno automático. */
 const MAX_ACCURACY_M = 25;
 
-export function ShapePreview({ ring, className = "h-40" }: { ring: LngLat[]; className?: string }) {
-  const [shape] = projectShapes([ring], 300, 180, 12);
-  if (!shape) return null;
-  return (
-    <svg viewBox="0 0 300 180" className={`w-full rounded-xl bg-brand-soft/50 ${className}`} role="img" aria-label="Contorno do talhão">
-      <path d={shape.path} className="fill-brand/25 stroke-brand" strokeWidth={2} strokeLinejoin="round" />
-    </svg>
-  );
-}
-
 const km = (m: number) => (m >= 1000 ? `${formatNumberBR(m / 1000, 2)} km` : `${formatNumberBR(m, 0)} m`);
 
 export function BoundaryCard({ plot }: { plot: Plot }) {
-  const [mode, setMode] = useState<"view" | "record" | "import" | "draw">("view");
+  const [mode, setMode] = useState<"view" | "record" | "import" | "draw" | "coords">("view");
   const [message, setMessage] = useState("");
   const ring = plot.boundary && plot.boundary.length >= 3 ? plot.boundary : null;
   const neighbors = useLiveQuery(
@@ -64,6 +60,8 @@ export function BoundaryCard({ plot }: { plot: Plot }) {
   if (mode === "draw" && neighbors)
     return <TapDrawer initial={ring ?? []} neighbors={neighbors} onDone={save} onCancel={() => setMode("view")} />;
   if (mode === "import") return <Importer plotName={plot.name} onPick={save} onCancel={() => setMode("view")} />;
+  if (mode === "coords" && neighbors)
+    return <CoordsEditor plotName={plot.name} initial={ring} known={neighbors} onPick={save} onCancel={() => setMode("view")} />;
 
   const area = ring ? polygonAreaHa(ring) : 0;
   const declared = plot.areaHa;
@@ -122,6 +120,9 @@ export function BoundaryCard({ plot }: { plot: Plot }) {
               <button type="button" className="font-medium text-brand" onClick={() => setMode("record")}>
                 Refazer pelo GPS
               </button>
+              <button type="button" className="font-medium text-brand" onClick={() => setMode("coords")}>
+                Editar coordenadas
+              </button>
               <button type="button" className="font-medium text-brand" onClick={() => setMode("import")}>
                 Importar outro arquivo
               </button>
@@ -129,18 +130,22 @@ export function BoundaryCard({ plot }: { plot: Plot }) {
                 Apagar contorno
               </button>
             </div>
+            <ExportBoundary name={plot.name} ring={ring} />
           </>
         ) : (
           <>
             <p className="text-sm text-muted">
               Com o contorno, o talhão aparece no mapa da fazenda, a área é conferida e dá para abrir a rota até ele.
             </p>
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               <Button onClick={() => setMode("draw")}>
                 <Pointer className="size-4" /> Desenhar no mapa
               </Button>
               <Button variant="secondary" onClick={() => setMode("record")}>
                 <Footprints className="size-4" /> Caminhar (GPS)
+              </Button>
+              <Button variant="secondary" onClick={() => setMode("coords")}>
+                <Grid3x3 className="size-4" /> Colar coordenadas
               </Button>
               <Button variant="secondary" onClick={() => setMode("import")}>
                 <Upload className="size-4" /> Importar arquivo
@@ -155,6 +160,47 @@ export function BoundaryCard({ plot }: { plot: Plot }) {
         ) : null}
       </Card>
     </section>
+  );
+}
+
+/** Contorno para o banco (WKT do Sicor), o Google Earth (KML), outro sistema (GeoJSON) ou o laudo (planilha). */
+function ExportBoundary({ name, ring }: { name: string; ring: LngLat[] }) {
+  const base = `talhao-${fileSlug(name, "contorno")}`;
+
+  async function copyWkt() {
+    const wkt = toWkt(ring);
+    try {
+      await navigator.clipboard.writeText(wkt);
+      toast("WKT copiado. Cole no sistema do banco ou do CAR.");
+    } catch {
+      // Sem acesso à área de transferência: entrega como arquivo.
+      saveFile(wkt, `${base}.wkt`, "text/plain");
+    }
+  }
+
+  const files = [
+    { label: "KML", run: () => saveFile(toKml(name, [{ name, ring }]), `${base}.kml`, "application/vnd.google-earth.kml+xml") },
+    { label: "GeoJSON", run: () => saveFile(toGeoJson(name, ring), `${base}.geojson`, "application/geo+json") },
+    { label: "Planilha", run: () => saveFile(toCsv([VERTEX_HEADER, ...vertexRows(ring)]), `${base}-vertices.csv`, "text/csv;charset=utf-8") },
+  ];
+
+  return (
+    <div className="space-y-2 border-t border-border pt-3">
+      <p className="text-sm font-medium">Exportar contorno</p>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <Button variant="secondary" onClick={copyWkt}>
+          <Copy aria-hidden className="size-4" /> Copiar WKT
+        </Button>
+        {files.map((f) => (
+          <Button key={f.label} variant="secondary" onClick={f.run}>
+            <Download aria-hidden className="size-4" /> {f.label}
+          </Button>
+        ))}
+      </div>
+      <p className="text-xs text-muted">
+        WKT com 7 casas decimais, no formato usado no crédito rural (Sicor). A planilha traz cada vértice em graus, GMS e UTM.
+      </p>
+    </div>
   );
 }
 

@@ -12,19 +12,11 @@ import { fitFontSize, formatDate, plotLabel, plotShortName, todayISO } from "@/l
 import { center, mapsLink, polygonAreaHa, projectShapes, toKml, type LngLat } from "@/lib/geo";
 import { formatNumberBR } from "@/lib/operations";
 import { buildPanel, type Alert, type PlotStatus } from "@/lib/panel";
+import { fileSlug, saveFile } from "@/lib/save-file";
 
 // Quadro menor = texto maior quando o SVG encolhe na tela do celular.
 const W = 600;
 const H = 390;
-
-function saveFile(text: string, name: string, type: string) {
-  const url = URL.createObjectURL(new Blob([text], { type }));
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = name;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 10_000);
-}
 
 function FarmMap() {
   const router = useRouter();
@@ -94,8 +86,7 @@ function FarmMap() {
       farm.name,
       drawn.map((s) => ({ name: s.plot.name, ring: s.plot.boundary! })),
     );
-    const slug = farm.name.normalize("NFD").replace(/[^\w]+/g, "-").replace(/^-|-$/g, "").toLowerCase();
-    saveFile(kml, `talhoes-${slug || "fazenda"}.kml`, "application/vnd.google-earth.kml+xml");
+    saveFile(kml, `talhoes-${fileSlug(farm.name, "fazenda")}.kml`, "application/vnd.google-earth.kml+xml");
   }
 
   return (

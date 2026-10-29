@@ -8,11 +8,21 @@ export type LngLat = [number, number];
 const EARTH_RADIUS_M = 6_371_008.8;
 const rad = (deg: number) => (deg * Math.PI) / 180;
 
-/** Projeção local em metros (equirretangular). Para talhões (poucos km) o erro é desprezível. */
+// Elipsoide GRS80 (SIRGAS 2000).
+const GRS80_A = 6_378_137;
+const GRS80_E2 = (1 / 298.257222101) * (2 - 1 / 298.257222101);
+
+/**
+ * Projeção local em metros com os raios do elipsoide na latitude média (norte-sul e leste-oeste).
+ * Com a Terra como esfera, a área no Brasil saía ~0,4% maior (4 ha numa fazenda de 1.000 ha).
+ * Para talhões (poucos km), o erro que sobra é desprezível.
+ */
 function toMeters(ring: LngLat[]): [number, number][] {
   const lat0 = rad(ring.reduce((s, p) => s + p[1], 0) / ring.length);
-  const cos0 = Math.cos(lat0);
-  return ring.map(([lng, lat]) => [EARTH_RADIUS_M * rad(lng) * cos0, EARTH_RADIUS_M * rad(lat)]);
+  const w = 1 - GRS80_E2 * Math.sin(lat0) ** 2;
+  const northSouth = (GRS80_A * (1 - GRS80_E2)) / w ** 1.5;
+  const eastWest = (GRS80_A / Math.sqrt(w)) * Math.cos(lat0);
+  return ring.map(([lng, lat]) => [eastWest * rad(lng), northSouth * rad(lat)]);
 }
 
 /** Tira o último ponto se ele repete o primeiro (anel fechado do GeoJSON/KML). */

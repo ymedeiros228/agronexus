@@ -6,7 +6,7 @@ Fase 1 em andamento. App web (PWA) em `apps/web`, local-first (dados no IndexedD
 Rodar localmente (a partir de `apps/web`):
 - Desenvolvimento: `npm run dev`
 - Produção (necessária para o service worker): `npm run build` e depois `npx next start -p 3100`
-- Conferência: `npx tsc --noEmit`, `npx eslint`, `npm test` (Vitest, 155 testes)
+- Conferência: `npx tsc --noEmit`, `npx eslint`, `npm test` (Vitest, 173 testes)
 
 ## Concluído
 - Repositório, docs, Plano Mestre, ADRs 0001 a 0008, roadmap por tela.
@@ -29,6 +29,8 @@ Rodar localmente (a partir de `apps/web`):
   - **Custo realizado x previsto**: só operação concluída ou em andamento entra no custo; planejada aparece como "previsto".
   - **Financeiro da safra**: vendas (sacas, preço líquido, comprador), despesas gerais por categoria, receita, custo total (operações + despesas), margem e margem/ha, ponto de equilíbrio (sc/ha ao preço médio e R$/sc com a produtividade), grão produzido/vendido/a vender, composição do custo. Entra no painel (custo/ha), no relatório e na comparação entre safras.
   - **Mapa de talhões** (com satélite da Esri guardado no aparelho para abrir offline): contorno caminhando com GPS (filtra precisão pior que 25 m e pontos a menos de 5 m; tela fica ligada onde o navegador deixa), desenhado com toques sobre o satélite ou importado de KML/KMZ/GeoJSON; área e perímetro pelo contorno, botão para usar como área do talhão; mapa da fazenda colorido pela situação; rota até o talhão (abre o app de mapas); exportação KML.
+  - **Coordenadas** (Etapa 4, `src/lib/coords.ts`): lê graus decimais (vírgula ou ponto, lat/long ou long/lat percebido pela faixa do Brasil, com botão para inverter), GMS (S/N/L/O/W, antes ou depois), UTM SIRGAS 2000 (fuso e hemisfério; sugere o fuso pelos contornos da fazenda; aceita "E 385.745,44 m N 9.167.249,06 m" de memorial) e WKT; converte UTM ↔ geográfica (fórmulas de Snyder no GRS80, iguais ao proj4 em menos de 0,1 mm). No contorno do talhão: "Colar coordenadas"/"Editar coordenadas" com prévia, área, aviso de linhas cruzadas e tabela de vértices (graus e UTM). Exporta: **Copiar WKT** (7 casas, formato do Sicor), KML, GeoJSON e planilha de vértices (graus, GMS, UTM).
+  - **Área pelo elipsoide**: `polygonAreaHa` usa os raios do GRS80 na latitude do talhão (antes, Terra como esfera: área ~0,4% maior).
   - **Dados**: backup JSON de todas as tabelas (lista única em `backup.ts`), restauração que só mescla, lembrete de backup no painel, planilhas CSV (visitas, operações com insumos, estoque, vendas e despesas), armazenamento persistente.
   - Banco local na versão 8 (v2: safra na visita, tabela meta; v3: operações; v4: insumos e movimentos de estoque; v5: vendas e despesas; v6: rótulo da safra padronizado; v7: tabela `clients`, um cliente por produtor distinto das fazendas; v8: índice `_pendente` em todas as tabelas de dados, tudo o que existia fica pendente para subir no primeiro login). Migrações até a v5 verificadas no navegador com dados de teste; v6 a v8 nos testes.
   - Backup não leva o estado de envio (`_pendente`, `_sync`): o que é restaurado fica pendente no aparelho que restaurou.

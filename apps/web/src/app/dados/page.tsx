@@ -8,17 +8,9 @@ import { exportFinanceCsv, exportOperationsCsv, exportStockCsv, exportVisitsCsv 
 import { getMeta } from "@/lib/db";
 import { demoLoaded, loadDemo, removeDemo } from "@/lib/demo";
 import { todayISO } from "@/lib/format";
+import { saveFile } from "@/lib/save-file";
 
 type StorageInfo = { persisted: boolean; usedMB: number | null };
-
-function saveFile(blob: Blob, name: string) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = name;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 10_000);
-}
 
 export default function DataPage() {
   const counts = useLiveQuery(() => countLocalRecords());
