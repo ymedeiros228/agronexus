@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { visitBadge, visitKindInfo } from "@/lib/catalog";
 import { formatDate, plotLabel, todayISO } from "@/lib/format";
 import type { Visit } from "@/lib/db";
 import { Card, Chip } from "./ui";
@@ -42,9 +43,12 @@ export function VisitRow({
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <p className="truncate font-semibold">{plotLabel(plotName)}</p>
-              <p className="mt-0.5 truncate text-sm text-muted">{farmName ?? formatDate(visit.date)}</p>
+              <p className="mt-0.5 truncate text-sm text-muted">
+                {farmName ?? formatDate(visit.date)}
+                {visit.kind && visit.kind !== "monitoramento" && visit.stage ? ` · ${visitKindInfo(visit.kind).label}` : ""}
+              </p>
             </div>
-            <Chip>{visit.stage}</Chip>
+            <Chip>{visitBadge(visit)}</Chip>
           </div>
           {followUp ? (
             <p className="mt-2">

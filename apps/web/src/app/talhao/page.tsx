@@ -8,7 +8,7 @@ import { Button, Card, Chip, Empty, Field, inputClass, LinkButton, PageSkeleton,
 import { BoundaryCard } from "@/components/boundary";
 import { OperationRow } from "@/components/operation-row";
 import { toast } from "@/components/toaster";
-import { KIND_LABEL } from "@/lib/catalog";
+import { KIND_LABEL, visitBadge } from "@/lib/catalog";
 import { addSeason, alive, db, removePlot, updatePlot, updateSeason, type Finding, type Season, type Visit, restoreRemoved } from "@/lib/db";
 import { formatDate, todayISO, plotLabel } from "@/lib/format";
 import { usesByOperation } from "@/lib/stock";
@@ -92,6 +92,8 @@ function Plot() {
       label,
       cultivar: String(f.get("cultivar") ?? "").trim(),
       plantingDate: String(f.get("planting") ?? "") || null,
+      rowSpacingM: parseNumberBR(String(f.get("spacing") ?? "")),
+      targetPopulation: parseNumberBR(String(f.get("population") ?? "")),
     };
     if (panel === "new-season") await addSeason(id, values);
     else if (current) await updateSeason(current.id, values);
@@ -187,9 +189,20 @@ function Plot() {
                     ? `Plantio ${formatDate(current.plantingDate)} · ${daysSince(current.plantingDate)} dias`
                     : "Data de plantio não informada"}
                 </p>
+                {current.rowSpacingM || current.targetPopulation ? (
+                  <p className="text-sm text-muted">
+                    {[
+                      current.rowSpacingM ? `Espaçamento ${formatNumberBR(current.rowSpacingM, 2)} m` : null,
+                      current.targetPopulation ? `${formatNumberBR(current.targetPopulation, 0)} plantas/ha planejadas` : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </p>
+                ) : null}
                 {lastVisit ? (
                   <p className="text-sm text-muted">
-                    Última visita {formatDate(lastVisit.date)} · {lastVisit.stage}
+                    Última visita {formatDate(lastVisit.date)}
+                    {lastVisit.stage ? ` · ${lastVisit.stage}` : ""}
                   </p>
                 ) : null}
               </div>
@@ -313,6 +326,26 @@ function SeasonForm({
         <Field label="Data de plantio">
           <input name="planting" type="date" defaultValue={season?.plantingDate ?? ""} className={inputClass} />
         </Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Espaçamento (m)" hint="Entre linhas">
+            <input
+              name="spacing"
+              inputMode="decimal"
+              defaultValue={season?.rowSpacingM != null ? formatNumberBR(season.rowSpacingM, 2) : ""}
+              className={inputClass}
+              placeholder="0,5"
+            />
+          </Field>
+          <Field label="População planejada" hint="Plantas/ha">
+            <input
+              name="population"
+              inputMode="numeric"
+              defaultValue={season?.targetPopulation != null ? formatNumberBR(season.targetPopulation, 0) : ""}
+              className={inputClass}
+              placeholder="260.000"
+            />
+          </Field>
+        </div>
         <Button type="submit" className="w-full">
           {season ? "Salvar safra" : "Começar safra nova"}
         </Button>
@@ -371,7 +404,7 @@ function Timeline({ visits, findingsByVisit }: { visits: Visit[]; findingsByVisi
               <Card className="transition hover:border-brand/40">
                 <div className="flex items-center justify-between gap-3">
                   <p className="font-medium">{formatDate(v.date)}</p>
-                  <Chip>{v.stage}</Chip>
+                  <Chip>{visitBadge(v)}</Chip>
                 </div>
                 {fs.length ? (
                   <p className="mt-2 flex flex-wrap gap-1.5">

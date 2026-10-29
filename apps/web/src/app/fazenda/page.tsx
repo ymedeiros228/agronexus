@@ -269,7 +269,8 @@ function Farm() {
                         ) : null}
                         {last ? (
                           <p className="text-sm text-muted">
-                            Última visita {formatDate(last.date)} · {last.stage}
+                            Última visita {formatDate(last.date)}
+                            {last.stage ? ` · ${last.stage}` : ""}
                           </p>
                         ) : null}
                       </div>

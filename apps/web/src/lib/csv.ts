@@ -1,4 +1,4 @@
-import { KIND_LABEL } from "./catalog";
+import { KIND_LABEL, visitKindInfo } from "./catalog";
 import {
   alive,
   db,
@@ -13,8 +13,9 @@ import {
 } from "./db";
 import { EXPENSE_NAME } from "./finance";
 import { formatDate } from "./format";
-import { KIND_NAME, STATUS_NAME } from "./operations";
+import { KIND_NAME, STATUS_NAME, formatNumberBR } from "./operations";
 import { latestSeason } from "./season";
+import { summarizeStand } from "./stand";
 import { CATEGORY_NAME, stockOf, usesByOperation, type SupplyStock, type Use } from "./stock";
 
 /** Número no formato do Excel em português: vírgula decimal, sem separador de milhar. */
@@ -48,6 +49,9 @@ const HEADER = [
   "Observações da visita",
   "Recomendação",
   "Retorno",
+  "Tipo de visita",
+  "Estande (por metro)",
+  "Estande (por hectare)",
 ];
 
 export function csvCell(value: string | number | null | undefined): string {
@@ -91,7 +95,15 @@ export function visitRows(
       season?.cultivar ?? "",
       v.stage,
     ];
-    const tail = [v.observations, v.recommendation, v.followUpDate ? formatDate(v.followUpDate) : ""];
+    const stand = summarizeStand(v.stand);
+    const tail = [
+      v.observations,
+      v.recommendation,
+      v.followUpDate ? formatDate(v.followUpDate) : "",
+      visitKindInfo(v.kind).label,
+      stand ? formatNumberBR(stand.perMeter, 1) : "",
+      stand?.perHa != null ? Math.round(stand.perHa) : "",
+    ];
     const fs = (byVisit.get(v.id) ?? []).sort((a, b) => a.createdAt - b.createdAt);
     if (fs.length === 0) out.push([...base, "", "", "", "", ...tail]);
     for (const f of fs) out.push([...base, KIND_LABEL[f.kind], f.name, f.amount, f.note, ...tail]);

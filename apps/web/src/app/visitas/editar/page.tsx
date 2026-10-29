@@ -50,6 +50,8 @@ function EditVisit() {
         observations: visit.observations,
         recommendation: visit.recommendation,
         followUpDate: visit.followUpDate,
+        kind: visit.kind ?? "monitoramento",
+        stand: visit.stand ?? null,
         findings: findings.map((f) => ({ id: f.id, kind: f.kind, name: f.name, amount: f.amount, note: f.note })),
         photos: photos.map((p) => ({
           id: p.id,

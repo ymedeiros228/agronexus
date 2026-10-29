@@ -166,3 +166,41 @@ describe("updateVisit", () => {
     await expect(updateVisit(id, input())).rejects.toThrow();
   });
 });
+
+describe("tipo de visita e estande", () => {
+  const stand = (spacingM: number | null, targetPerHa: number | null) => ({
+    spacingM,
+    targetPerHa,
+    points: [
+      { plants: 12, meters: 1, lat: -6.1, lng: -44.2 },
+      { plants: 0, meters: 0, lat: null, lng: null },
+    ],
+  });
+
+  it("visita antiga sem tipo vira monitoramento; monitoramento não guarda estande", async () => {
+    const id = await createVisit(input({ stand: stand(0.5, null) }));
+    const visit = await db.visits.get(id);
+    expect(visit?.kind).toBe("monitoramento");
+    expect(visit?.stand).toBeNull();
+  });
+
+  it("estande guarda os pontos válidos e ensina espaçamento e população à safra", async () => {
+    setNow(3_000);
+    const id = await createVisit(input({ kind: "estande", stage: "", stand: stand(0.5, 260_000) }));
+    const visit = await db.visits.get(id);
+    expect(visit?.kind).toBe("estande");
+    expect(visit?.stand?.points).toHaveLength(1);
+    const season = await db.seasons.get("s1-new");
+    expect(season?.rowSpacingM).toBe(0.5);
+    expect(season?.targetPopulation).toBe(260_000);
+    expect(season?.updatedAt).toBe(3_000);
+  });
+
+  it("editar sem mandar a contagem mantém a que estava", async () => {
+    const id = await createVisit(input({ kind: "estande", stand: stand(0.45, null) }));
+    await updateVisit(id, input({ kind: "estande", stand: undefined }));
+    expect((await db.visits.get(id))?.stand?.spacingM).toBe(0.45);
+    await updateVisit(id, input({ kind: "monitoramento" }));
+    expect((await db.visits.get(id))?.stand).toBeNull();
+  });
+});

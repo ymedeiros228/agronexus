@@ -124,7 +124,15 @@ export function buildDemo(now: number = Date.now()): DemoData {
 
   const seasons: Season[] = [];
   for (const [id] of plotsDef) {
-    seasons.push({ ...base(`s-${id}`), plotId: ref(id), label: current, cultivar: cultivars[id], plantingDate: day(planted[id]) });
+    seasons.push({
+      ...base(`s-${id}`),
+      plotId: ref(id),
+      label: current,
+      cultivar: cultivars[id],
+      plantingDate: day(planted[id]),
+      rowSpacingM: 0.5,
+      targetPopulation: 260_000,
+    });
     seasons.push({ ...base(`o-${id}`), plotId: ref(id), label: past, cultivar: cultivars[id], plantingDate: day(planted[id] - 362) });
   }
 
@@ -157,7 +165,16 @@ export function buildDemo(now: number = Date.now()): DemoData {
       findings.push({ ...base(`${id}-f${i}`), visitId: ref(id), kind, name, amount, note: "" }),
     );
   }
-  visit("v1", "p1", -16, "VE", "Emergência uniforme, estande de 13 plantas/m.", "", null);
+  visit("v1", "p1", -16, "VE", "Emergência uniforme.", "", null);
+  // Contagem de estande: 8 pontos de 1 m, perto da população planejada.
+  Object.assign(visits[visits.length - 1], {
+    kind: "estande",
+    stand: {
+      spacingM: 0.5,
+      targetPerHa: 260_000,
+      points: [13, 12, 14, 13, 12, 13, 14, 12].map((plants) => ({ plants, meters: 1, lat: null, lng: null })),
+    },
+  } satisfies Partial<Visit>);
   visit("v2", "p1", -9, "V2", "Boa sanidade. Início de buva na bordadura leste.", "Planejar controle de buva antes do fechamento.", -4, [
     ["daninha", "Buva", "manchas na bordadura"],
   ]);

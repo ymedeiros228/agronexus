@@ -112,6 +112,35 @@ describe("relatório da visita", () => {
     ]);
   });
 
+  it("visita de estande traz o tipo e a contagem, antes dos achados", () => {
+    const text = visitReportText({
+      visit: {
+        ...visit,
+        kind: "estande",
+        stand: {
+          spacingM: 0.5,
+          targetPerHa: 260_000,
+          points: [
+            { plants: 12, meters: 1, lat: null, lng: null },
+            { plants: 14, meters: 1, lat: null, lng: null },
+          ],
+        },
+      },
+      findings: [],
+      dap: 12,
+      author: null,
+    });
+    expect(text.split("\n").slice(0, 7)).toEqual([
+      "*Relatório de visita — Fazenda · Talhão ?*",
+      "Tipo: Estande",
+      "Data: 20/12/2026 · Estágio: R3 · 12 dias após o plantio",
+      "",
+      "*Estande*",
+      "13 plantas/m · 260.000 plantas/ha (100% da população planejada de 260.000)",
+      "2 pontos · mín. 12 e máx. 14 plantas/m · variação 11% · espaçamento 0,5 m",
+    ]);
+  });
+
   it("sem autor não tem assinatura", () => {
     const text = visitReportText({ visit, findings: [], dap: null, author: null });
     expect(text).not.toContain("—\n");

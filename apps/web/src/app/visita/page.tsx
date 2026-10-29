@@ -8,12 +8,14 @@ import { Bug, CircleHelp, ClipboardList, MessageCircle, Microscope, Sprout, type
 import { PhotoGallery } from "@/components/photo-viewer";
 import { Button, Card, Chip, Empty, LinkButton, PageSkeleton, SectionTitle } from "@/components/ui";
 import { toast } from "@/components/toaster";
-import { KIND_LABEL } from "@/lib/catalog";
+import { KIND_LABEL, visitKindInfo } from "@/lib/catalog";
 import { whatsappLink } from "@/lib/clients";
 import { alive, db, removeVisit, restoreRemoved, setFollowUpDone, type FindingKind } from "@/lib/db";
 import { formatDate, plotLabel } from "@/lib/format";
+import { formatNumberBR } from "@/lib/operations";
 import { authorFromProfile, getProfile, signatureLines } from "@/lib/profile";
 import { daysSince, latestSeason } from "@/lib/season";
+import { cleanStand, standReportLines, standUnit, summarizeStand } from "@/lib/stand";
 import { visitReportText } from "@/lib/visit-report";
 
 export default function VisitPage() {
@@ -80,6 +82,10 @@ function Visit() {
     ? daysSince(season.plantingDate, new Date(`${visit.date}T12:00:00`).getTime())
     : null;
   const report = visitReportText({ visit, farm, plot, client, season, findings, dap, author });
+  const kindInfo = visitKindInfo(visit.kind);
+  const stand = cleanStand(visit.stand);
+  const standSummary = summarizeStand(stand);
+  const unit = standUnit(visit.kind);
   const signature = signatureLines(author);
   // Com o telefone do cliente, o relatório vai direto para a conversa com ele.
   const wa = client ? whatsappLink(client.phone) : null;
@@ -120,7 +126,9 @@ function Visit() {
       <header className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#0f2b1c] via-[#14532f] to-[#1c6b41] p-5 text-white shadow-lg shadow-[#1c6b41]/20 sm:p-6 print:bg-none print:p-0 print:text-black print:shadow-none">
         <ClipboardList aria-hidden className="pointer-events-none absolute -bottom-8 -right-6 size-40 text-white/[0.06] print:hidden" />
         <p className="text-xs font-semibold uppercase tracking-wider text-white/60 print:text-muted">
-          Relatório de visita · {formatDate(visit.date)}
+          {["Relatório de visita", visit.kind && visit.kind !== "monitoramento" ? kindInfo.label : null, formatDate(visit.date)]
+            .filter(Boolean)
+            .join(" · ")}
         </p>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">{plotLabel(plot?.name)}</h1>
         <p className="mt-0.5 text-white/75 print:text-muted">
@@ -169,39 +177,69 @@ function Visit() {
         </p>
       ) : null}
 
-      <section className="space-y-3">
-        <SectionTitle>Achados</SectionTitle>
-        {findings.length === 0 ? (
-          <Card>
-            <p className="text-sm text-muted">Nenhum achado registrado.</p>
-          </Card>
-        ) : (
-          <Card className="divide-y divide-border p-0">
-            {findings.map((f) => {
-              const k = FINDING_STYLE[f.kind];
-              return (
-                <div key={f.id} className="flex items-start gap-3 p-4">
-                  <span aria-hidden className={`grid size-10 shrink-0 place-items-center rounded-xl ${k.tone}`}>
-                    <k.icon className="size-5" />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="font-medium">{f.name}</p>
-                    <p className="mt-0.5 text-sm text-muted">
-                      {KIND_LABEL[f.kind]}
-                      {f.note ? ` · ${f.note}` : ""}
-                    </p>
-                    {f.amount ? (
-                      <p className="mt-1.5">
-                        <Chip tone="muted">{f.amount}</Chip>
-                      </p>
-                    ) : null}
-                  </div>
+      {stand && standSummary ? (
+        <section className="space-y-3">
+          <SectionTitle>{visit.kind === "plantio" ? "Sementes no sulco" : "Estande"}</SectionTitle>
+          <Card className="space-y-3">
+            <dl className="grid grid-cols-3 gap-2">
+              {[
+                [`${unit}/m`, formatNumberBR(standSummary.perMeter, 1)],
+                [`${unit}/ha`, standSummary.perHa != null ? formatNumberBR(standSummary.perHa, 0) : "—"],
+                ["Do planejado", standSummary.pctOfTarget != null ? `${formatNumberBR(standSummary.pctOfTarget, 0)}%` : "—"],
+              ].map(([label, value]) => (
+                <div key={label} className="min-w-0 rounded-xl bg-brand-soft px-3 py-2">
+                  <dt className="truncate text-xs text-muted">{label}</dt>
+                  <dd className="truncate text-lg font-semibold tabular-nums">{value}</dd>
                 </div>
-              );
-            })}
+              ))}
+            </dl>
+            <p className="text-sm text-muted">{standReportLines(stand, visit.kind)[1]}</p>
+            <ol className="flex flex-wrap gap-1.5 text-xs">
+              {stand.points.map((p, i) => (
+                <li key={i} className="rounded-full bg-border/50 px-2.5 py-1 tabular-nums">
+                  {i + 1}: {formatNumberBR(p.plants, 0)} em {formatNumberBR(p.meters, 2)} m
+                </li>
+              ))}
+            </ol>
           </Card>
-        )}
-      </section>
+        </section>
+      ) : null}
+
+      {kindInfo.findings || findings.length > 0 ? (
+        <section className="space-y-3">
+          <SectionTitle>Achados</SectionTitle>
+          {findings.length === 0 ? (
+            <Card>
+              <p className="text-sm text-muted">Nenhum achado registrado.</p>
+            </Card>
+          ) : (
+            <Card className="divide-y divide-border p-0">
+              {findings.map((f) => {
+                const k = FINDING_STYLE[f.kind];
+                return (
+                  <div key={f.id} className="flex items-start gap-3 p-4">
+                    <span aria-hidden className={`grid size-10 shrink-0 place-items-center rounded-xl ${k.tone}`}>
+                      <k.icon className="size-5" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium">{f.name}</p>
+                      <p className="mt-0.5 text-sm text-muted">
+                        {KIND_LABEL[f.kind]}
+                        {f.note ? ` · ${f.note}` : ""}
+                      </p>
+                      {f.amount ? (
+                        <p className="mt-1.5">
+                          <Chip tone="muted">{f.amount}</Chip>
+                        </p>
+                      ) : null}
+                    </div>
+                  </div>
+                );
+              })}
+            </Card>
+          )}
+        </section>
+      ) : null}
 
       {photos.length > 0 ? (
         <section className="space-y-3">

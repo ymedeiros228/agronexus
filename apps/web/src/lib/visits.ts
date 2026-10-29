@@ -1,6 +1,8 @@
-import { alive, db, newBase, type Finding, type FindingKind, type Photo, type Visit } from "./db";
+import { visitKindInfo } from "./catalog";
+import { alive, db, newBase, type Finding, type FindingKind, type Photo, type StandCount, type Visit, type VisitKind } from "./db";
 import { authorFromProfile, getProfile } from "./profile";
 import { latestSeason } from "./season";
+import { cleanStand } from "./stand";
 
 /**
  * Gravação de visitas com achados e fotos.
@@ -27,7 +29,29 @@ export type VisitInput = {
   followUpDate: string | null;
   findings: FindingInput[];
   photos: PhotoInput[];
+  /** Sem tipo = monitoramento. */
+  kind?: VisitKind;
+  stand?: StandCount | null;
 };
+
+/** Contagem só nos tipos que contam estande; ponto inválido sai. */
+function standFor(kind: VisitKind, stand: StandCount | null | undefined): StandCount | null {
+  return visitKindInfo(kind).stand ? cleanStand(stand) : null;
+}
+
+/**
+ * Espaçamento e população informados na contagem passam para a safra: na próxima visita já vêm
+ * preenchidos. Dentro de uma transação que inclua `seasons`.
+ */
+async function rememberStandBasis(seasonId: string | null | undefined, stand: StandCount | null, now: number) {
+  if (!seasonId || !stand) return;
+  const season = await db.seasons.get(seasonId);
+  if (!season || season.deletedAt) return;
+  const patch: { rowSpacingM?: number; targetPopulation?: number } = {};
+  if (stand.spacingM && stand.spacingM !== season.rowSpacingM) patch.rowSpacingM = stand.spacingM;
+  if (stand.targetPerHa && stand.targetPerHa !== season.targetPopulation) patch.targetPopulation = stand.targetPerHa;
+  if (Object.keys(patch).length) await db.seasons.update(seasonId, { ...patch, updatedAt: now });
+}
 
 function cleanFindings(list: FindingInput[]): FindingInput[] {
   return list
@@ -56,9 +80,12 @@ export async function createVisit(input: VisitInput): Promise<string> {
     recommendation: input.recommendation.trim(),
     followUpDate: input.followUpDate,
     followUpDone: false,
+    kind: input.kind ?? "monitoramento",
+    stand: standFor(input.kind ?? "monitoramento", input.stand),
     ...(author ? { author } : {}),
   };
-  await db.transaction("rw", db.visits, db.findings, db.photos, async () => {
+  await db.transaction("rw", [db.visits, db.findings, db.photos, db.seasons], async () => {
+    await rememberStandBasis(visit.seasonId, visit.stand ?? null, visit.updatedAt);
     await db.visits
       .where("plotId")
       .equals(input.plotId)
@@ -92,16 +119,22 @@ export async function updateVisit(id: string, input: VisitInput): Promise<void> 
   const now = Date.now();
   const seasonIdIfMoved = await currentSeasonId(input.plotId);
 
-  await db.transaction("rw", db.visits, db.findings, db.photos, async () => {
+  await db.transaction("rw", [db.visits, db.findings, db.photos, db.seasons], async () => {
     const old = await db.visits.get(id);
     if (!old || old.deletedAt) throw new Error("Visita não encontrada.");
 
     const followUpDate = input.followUpDate;
+    // Mudou de talhão: passa para a safra vigente do novo talhão.
+    const seasonId = old.plotId === input.plotId ? (old.seasonId ?? null) : seasonIdIfMoved;
+    const kind = input.kind ?? old.kind ?? "monitoramento";
+    const stand = standFor(kind, input.stand === undefined ? old.stand : input.stand);
+    await rememberStandBasis(seasonId, stand, now);
     await db.visits.update(id, {
       farmId: input.farmId,
       plotId: input.plotId,
-      // Mudou de talhão: passa para a safra vigente do novo talhão.
-      seasonId: old.plotId === input.plotId ? (old.seasonId ?? null) : seasonIdIfMoved,
+      seasonId,
+      kind,
+      stand,
       date: input.date,
       stage: input.stage,
       observations: input.observations.trim(),

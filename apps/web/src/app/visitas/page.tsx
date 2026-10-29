@@ -120,7 +120,7 @@ export default function MonitoringPage() {
                         <span className="min-w-0 flex-1">
                           <span className="flex items-start justify-between gap-2">
                             <span className="truncate font-medium">{f.name}</span>
-                            <Chip tone="muted">{v.stage}</Chip>
+                            {v.stage ? <Chip tone="muted">{v.stage}</Chip> : null}
                           </span>
                           <span className="block truncate text-sm text-muted">
                             {farmName.get(v.farmId)} · {plotLabel(plotName.get(v.plotId))} · {formatDate(v.date)}

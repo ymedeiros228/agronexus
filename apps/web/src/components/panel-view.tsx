@@ -16,6 +16,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { Welcome } from "@/components/welcome";
+import { visitBadge } from "@/lib/catalog";
 import { MiniMap, hasShape } from "@/components/map-bits";
 import { OperationRow } from "@/components/operation-row";
 import { VisitRow } from "@/components/visit-row";
@@ -555,7 +556,7 @@ function PlotCard({ status }: { status: PlotStatus }) {
             <p className="font-medium">{plotLabel(plot.name)}</p>
             {details ? <p className="mt-0.5 text-sm text-muted">{details}</p> : null}
           </div>
-          {lastVisit ? <Chip>{lastVisit.stage}</Chip> : <Chip tone="muted">Sem visita</Chip>}
+          {lastVisit ? <Chip>{visitBadge(lastVisit)}</Chip> : <Chip tone="muted">Sem visita</Chip>}
         </div>
         {lastVisit ? (
           <>

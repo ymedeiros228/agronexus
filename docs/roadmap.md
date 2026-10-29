@@ -42,7 +42,7 @@ Regra que vale para todas as telas: **número no painel só aparece se vier de d
 | 0 | Arrumar a casa: ADR 0008 e docs atualizados |
 | 1 | ~~Base profissional do engenheiro: perfil e papéis, modo "vou a campo", carteira de clientes, agenda "Hoje", relatório da visita com identidade e responsável técnico~~ Feito em 28/10 (`/perfil`, `/clientes`, `/cliente`, `/agenda`; banco v7) |
 | 2 | Servidor (Supabase em conta própria do AgroNexus), login, envio automático quando houver sinal e publicação HTTPS (Vercel). **Parte do aparelho e esquema do servidor prontos em 28/10**; falta criar a conta, aplicar a migração e publicar |
-| 3 | Visita completa: tipos de visita, dados do plantio, contagem de estande |
+| 3 | ~~Visita completa: tipos de visita, dados do plantio, contagem de estande~~ Feito em 29/10 |
 | 4 | Mapeamento por coordenadas: decimal, GMS, UTM SIRGAS 2000, WKT; tabela de vértices; exportar WKT (7 casas), GeoJSON e CSV; conversor e pontos |
 | 5 | Pedidos do RTV, amostragem por ponto com referência da Embrapa, solo (calagem e gessagem), relatório da safra do cliente, dossiê da gleba, gleba e shapefile, janelas de plantio, perda |
 | 6 | Convite do produtor e acesso revogável, visita do engenheiro no painel do produtor, recomendação que vira operação planejada, clima INMET, NDVI |

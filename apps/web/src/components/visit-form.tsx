@@ -8,11 +8,13 @@ import { BlobImg } from "@/components/blob-img";
 import { PlotPickerFields, usePlotPicker } from "@/components/plot-picker";
 import { Button, Card, Empty, Field, LinkButton, PageTitle, SectionTitle, inputClass } from "@/components/ui";
 import { DictationTextarea } from "@/components/dictation";
+import { StandFields, standDraftFrom, standFromDraft, type StandDraft } from "@/components/stand-fields";
 import { toast } from "@/components/toaster";
-import { DIAGNOSIS_OPTIONS, FINDING_PRESETS, KIND_LABEL, STAGES } from "@/lib/catalog";
-import { alive, db, type FindingKind } from "@/lib/db";
+import { DIAGNOSIS_OPTIONS, FINDING_PRESETS, KIND_LABEL, STAGES, VISIT_KINDS, visitKindInfo } from "@/lib/catalog";
+import { alive, db, type FindingKind, type VisitKind } from "@/lib/db";
 import { compressImage, getPosition, todayISO } from "@/lib/format";
 import { daysSince, latestSeason } from "@/lib/season";
+import { summarizeStand } from "@/lib/stand";
 import { createVisit, updateVisit, type FindingInput, type PhotoInput, type VisitInput } from "@/lib/visits";
 
 type FindingDraft = FindingInput & { key: string };
@@ -35,7 +37,9 @@ export function VisitForm({ visitId, initial, seasonId, defaultFarmId, defaultPl
   const picker = usePlotPicker(initial?.farmId ?? defaultFarmId ?? "", initial?.plotId ?? defaultPlotId ?? "");
   const { farms, farmId, plotId } = picker;
   const [date, setDate] = useState(initial?.date ?? todayISO());
+  const [kind, setKind] = useState<VisitKind>(initial?.kind ?? "monitoramento");
   const [stage, setStage] = useState(initial?.stage ?? "");
+  const [standDraft, setStandDraft] = useState<StandDraft>(() => standDraftFrom(initial?.stand));
   const [findings, setFindings] = useState<FindingDraft[]>(
     () => initial?.findings.map((f) => ({ ...f, key: f.id ?? crypto.randomUUID() })) ?? [],
   );
@@ -98,8 +102,14 @@ export function VisitForm({ visitId, initial, seasonId, defaultFarmId, defaultPl
       setError("Escolha a fazenda e o talhão.");
       return;
     }
-    if (!stage) {
+    const info = visitKindInfo(kind);
+    if (info.stageRequired && !stage) {
       setError("Informe o estágio da cultura.");
+      return;
+    }
+    const stand = info.stand ? standFromDraft(standDraft, season) : null;
+    if (kind === "estande" && !summarizeStand(stand)) {
+      setError("Conte pelo menos um ponto: quantas plantas em quantos metros de linha.");
       return;
     }
     setError("");
@@ -113,6 +123,8 @@ export function VisitForm({ visitId, initial, seasonId, defaultFarmId, defaultPl
       observations,
       recommendation,
       followUpDate: followUp || null,
+      kind,
+      stand,
       findings: findings.map((f) => ({ id: f.id, kind: f.kind, name: f.name, amount: f.amount, note: f.note })),
       photos: photos.map((p) => ({ id: p.id, blob: p.blob, label: p.label, takenAt: p.takenAt, lat: p.lat, lng: p.lng })),
     };
@@ -150,6 +162,7 @@ export function VisitForm({ visitId, initial, seasonId, defaultFarmId, defaultPl
   }
 
   const visitTime = new Date(`${date || todayISO()}T12:00:00`).getTime();
+  const info = visitKindInfo(kind);
 
   return (
     <form onSubmit={save} className="space-y-6">
@@ -165,6 +178,28 @@ export function VisitForm({ visitId, initial, seasonId, defaultFarmId, defaultPl
         subtitle="Tudo é salvo neste aparelho, mesmo sem internet."
       />
 
+      <section className="space-y-2" aria-labelledby="tipo-visita">
+        <SectionTitle>
+          <span id="tipo-visita">Tipo de visita</span>
+        </SectionTitle>
+        <div className="flex flex-wrap gap-2">
+          {VISIT_KINDS.map((k) => (
+            <button
+              key={k.kind}
+              type="button"
+              onClick={() => setKind(k.kind)}
+              aria-pressed={kind === k.kind}
+              className={`min-h-10 rounded-full border px-3.5 text-sm font-medium transition ${
+                kind === k.kind ? "border-brand bg-brand-soft text-brand-strong ring-2 ring-brand/20" : "border-border bg-surface"
+              }`}
+            >
+              {k.label}
+            </button>
+          ))}
+        </div>
+        <p className="text-xs text-muted">{info.hint}</p>
+      </section>
+
       <Card className="space-y-4">
         <PlotPickerFields picker={picker} />
         {season ? (
@@ -178,7 +213,7 @@ export function VisitForm({ visitId, initial, seasonId, defaultFarmId, defaultPl
           <Field label="Data">
             <input type="date" required value={date} onChange={(e) => setDate(e.target.value)} className={inputClass} />
           </Field>
-          <Field label="Estágio">
+          <Field label={info.stageRequired ? "Estágio" : "Estágio (opcional)"}>
             <select className={inputClass} value={stage} onChange={(e) => setStage(e.target.value)}>
               <option value="">Selecione</option>
               {STAGES.map((s) => (
@@ -191,73 +226,77 @@ export function VisitForm({ visitId, initial, seasonId, defaultFarmId, defaultPl
         </div>
       </Card>
 
-      <section className="space-y-3">
-        <div className="flex items-center justify-between">
-          <SectionTitle>Pragas e doenças</SectionTitle>
-          <Button type="button" variant="ghost" onClick={addFinding}>
-            + Achado
-          </Button>
-        </div>
-        <datalist id="finding-names">
-          {FINDING_PRESETS.map((p) => (
-            <option key={p.name} value={p.name} />
-          ))}
-        </datalist>
-        {findings.length === 0 ? (
-          <Card>
-            <p className="text-sm text-muted">Nada anotado. Toque em “+ Achado” para registrar o que encontrou.</p>
-          </Card>
-        ) : (
-          findings.map((f) => (
-            <Card key={f.key} className="space-y-3">
-              <div className="grid grid-cols-[8.5rem_1fr] gap-3">
-                <select
-                  aria-label="Tipo"
-                  className={inputClass}
-                  value={f.kind}
-                  onChange={(e) => updateFinding(f.key, { kind: e.target.value as FindingKind })}
-                >
-                  {(Object.keys(KIND_LABEL) as FindingKind[]).map((k) => (
-                    <option key={k} value={k}>
-                      {KIND_LABEL[k]}
-                    </option>
-                  ))}
-                </select>
-                <input
-                  aria-label="Nome"
-                  list="finding-names"
-                  className={inputClass}
-                  placeholder="Nome (ex.: Percevejo-marrom)"
-                  value={f.name}
-                  onChange={(e) => updateFinding(f.key, { name: e.target.value })}
-                />
-              </div>
-              <input
-                aria-label="Quantidade ou medida"
-                className={inputClass}
-                placeholder="Quantidade ou medida (ex.: 2 por pano de batida)"
-                value={f.amount}
-                onChange={(e) => updateFinding(f.key, { amount: e.target.value })}
-              />
-              <input
-                aria-label="Observação"
-                className={inputClass}
-                placeholder="Observação (opcional)"
-                value={f.note}
-                onChange={(e) => updateFinding(f.key, { note: e.target.value })}
-              />
-              <Button
-                type="button"
-                variant="danger"
-                className="min-h-9 w-full"
-                onClick={() => setFindings((l) => l.filter((x) => x.key !== f.key))}
-              >
-                Remover achado
-              </Button>
+      {info.stand ? <StandFields kind={kind} draft={standDraft} onChange={setStandDraft} season={season} /> : null}
+
+      {info.findings || findings.length > 0 ? (
+        <section className="space-y-3">
+          <div className="flex items-center justify-between">
+            <SectionTitle>Pragas e doenças</SectionTitle>
+            <Button type="button" variant="ghost" onClick={addFinding}>
+              + Achado
+            </Button>
+          </div>
+          <datalist id="finding-names">
+            {FINDING_PRESETS.map((p) => (
+              <option key={p.name} value={p.name} />
+            ))}
+          </datalist>
+          {findings.length === 0 ? (
+            <Card>
+              <p className="text-sm text-muted">Nada anotado. Toque em “+ Achado” para registrar o que encontrou.</p>
             </Card>
-          ))
-        )}
-      </section>
+          ) : (
+            findings.map((f) => (
+              <Card key={f.key} className="space-y-3">
+                <div className="grid grid-cols-[8.5rem_1fr] gap-3">
+                  <select
+                    aria-label="Tipo"
+                    className={inputClass}
+                    value={f.kind}
+                    onChange={(e) => updateFinding(f.key, { kind: e.target.value as FindingKind })}
+                  >
+                    {(Object.keys(KIND_LABEL) as FindingKind[]).map((k) => (
+                      <option key={k} value={k}>
+                        {KIND_LABEL[k]}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    aria-label="Nome"
+                    list="finding-names"
+                    className={inputClass}
+                    placeholder="Nome (ex.: Percevejo-marrom)"
+                    value={f.name}
+                    onChange={(e) => updateFinding(f.key, { name: e.target.value })}
+                  />
+                </div>
+                <input
+                  aria-label="Quantidade ou medida"
+                  className={inputClass}
+                  placeholder="Quantidade ou medida (ex.: 2 por pano de batida)"
+                  value={f.amount}
+                  onChange={(e) => updateFinding(f.key, { amount: e.target.value })}
+                />
+                <input
+                  aria-label="Observação"
+                  className={inputClass}
+                  placeholder="Observação (opcional)"
+                  value={f.note}
+                  onChange={(e) => updateFinding(f.key, { note: e.target.value })}
+                />
+                <Button
+                  type="button"
+                  variant="danger"
+                  className="min-h-9 w-full"
+                  onClick={() => setFindings((l) => l.filter((x) => x.key !== f.key))}
+                >
+                  Remover achado
+                </Button>
+              </Card>
+            ))
+          )}
+        </section>
+      ) : null}
 
       <section className="space-y-3">
         <SectionTitle>Fotos</SectionTitle>

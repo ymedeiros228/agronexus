@@ -49,7 +49,23 @@ export type Season = Base & {
   label: string; // ex.: "2026/27"
   cultivar: string;
   plantingDate: string | null; // AAAA-MM-DD
+  /** Espaçamento entre linhas, em metros (ex.: 0,5). Base da conta de plantas por hectare. */
+  rowSpacingM?: number | null;
+  /** População planejada, em plantas por hectare (ex.: 260.000). */
+  targetPopulation?: number | null;
 };
+
+/** Tipo da visita. Ausente nas visitas antigas, que são de monitoramento. */
+export type VisitKind = "monitoramento" | "plantio" | "estande" | "pos-venda" | "pre-colheita" | "vistoria" | "outra";
+
+/** Um ponto da contagem: plantas (ou sementes, no plantio) em tantos metros de linha. */
+export type StandPoint = { plants: number; meters: number; lat: number | null; lng: number | null };
+
+/**
+ * Contagem de estande feita na visita. Guarda o espaçamento e a população usados na conta,
+ * para o relatório não mudar se a safra for editada depois.
+ */
+export type StandCount = { spacingM: number | null; targetPerHa: number | null; points: StandPoint[] };
 
 /** Quem registrou a visita: cópia do perfil no dia, para o relatório não mudar depois. */
 export type VisitAuthor = {
@@ -75,6 +91,9 @@ export type Visit = Base & {
   followUpDone: boolean;
   /** Ausente em visitas de antes da v7: o relatório usa o perfil atual. */
   author?: VisitAuthor | null;
+  /** Ausente = monitoramento. */
+  kind?: VisitKind;
+  stand?: StandCount | null;
 };
 
 export type FindingKind = "praga" | "doenca" | "daninha" | "outro";
@@ -447,11 +466,13 @@ export function updatePlot(id: string, patch: Partial<Pick<Plot, "name" | "areaH
   return db.plots.update(id, { ...patch, updatedAt: Date.now() });
 }
 
-export function updateSeason(id: string, patch: Pick<Season, "label" | "cultivar" | "plantingDate">) {
+type SeasonFields = Pick<Season, "label" | "cultivar" | "plantingDate" | "rowSpacingM" | "targetPopulation">;
+
+export function updateSeason(id: string, patch: Partial<SeasonFields>) {
   return db.seasons.update(id, { ...patch, updatedAt: Date.now() });
 }
 
-export function addSeason(plotId: string, data: Pick<Season, "label" | "cultivar" | "plantingDate">) {
+export function addSeason(plotId: string, data: Pick<Season, "label" | "cultivar" | "plantingDate"> & Partial<SeasonFields>) {
   return db.seasons.add({ ...newBase(), plotId, ...data });
 }
 

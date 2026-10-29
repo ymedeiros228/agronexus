@@ -6,7 +6,7 @@ Fase 1 em andamento. App web (PWA) em `apps/web`, local-first (dados no IndexedD
 Rodar localmente (a partir de `apps/web`):
 - Desenvolvimento: `npm run dev`
 - Produção (necessária para o service worker): `npm run build` e depois `npx next start -p 3100`
-- Conferência: `npx tsc --noEmit`, `npx eslint`, `npm test` (Vitest, 146 testes)
+- Conferência: `npx tsc --noEmit`, `npx eslint`, `npm test` (Vitest, 155 testes)
 
 ## Concluído
 - Repositório, docs, Plano Mestre, ADRs 0001 a 0008, roadmap por tela.
@@ -21,6 +21,8 @@ Rodar localmente (a partir de `apps/web`):
   - **Relatório com identidade**: a visita grava o autor (cópia do perfil); o relatório (tela, PDF e WhatsApp) traz o produtor e termina com nome, função, registro, empresa, telefone e "Sob supervisão de Eng. Agr. …". Com o telefone do cliente, botão "Enviar para … no WhatsApp" já abre a conversa com ele. Nova visita no talhão marca como feitos os retornos pendentes anteriores.
   - **Fazendas e talhões**: cadastrar, editar, remover (exclusão lógica em cascata). Página do talhão com safra atual, nova safra, achados da safra, operações, linha do tempo e safras anteriores.
   - **Monitoramento**: visita com estágio, achados, fotos com diagnóstico e GPS, recomendação, retorno; editar visita; relatório (WhatsApp/PDF); tela de ocorrências e lista de visitas.
+  - **Tipos de visita** (Etapa 3): monitoramento (padrão das antigas), plantio, estande, pós-venda, pré-colheita, vistoria/perda, outra (`VISIT_KINDS` em `src/lib/catalog.ts`). Cada tipo mostra só o que importa: o plantio não pede estágio nem achados; o estande exige pelo menos um ponto contado.
+  - **Contagem de estande** (`src/lib/stand.ts`, `components/stand-fields.tsx`): pontos de "X plantas em Y metros" com GPS; Enter abre o próximo ponto; plantas/m (média ponderada pelos metros), **plantas/ha = plantas/m ÷ espaçamento × 10.000**, % da população planejada, mínimo, máximo e variação entre pontos (CV). No plantio conta sementes. A visita guarda o espaçamento e a população usados; a safra aprende os dois (espaçamento e população planejada também editáveis na safra do talhão). Relatório, PDF, WhatsApp e planilha (colunas novas no fim) trazem o estande.
   - **Operações**: preparo, plantio, adubação, aplicação, colheita, outro; planejada/em andamento/concluída; área, custo, sacas colhidas (produtividade); atalho para concluir; plantio concluído preenche a data de plantio vazia da safra.
   - **Insumos e estoque**: cadastro (nome do produtor, categoria, unidade, estoque mínimo), entrada com valor pago, contagem que lança a diferença como ajuste, insumos na operação (total ou dose por hectare), baixa só quando a operação é concluída, "previsto" para operações abertas, aviso "vai faltar"/estoque baixo/saldo negativo no painel, preço médio das entradas, sugestão de custo da operação pelos insumos. Insumo usado em operação não pode ser excluído.
   - **Safras e relatório da safra**: lista de safras com progresso da colheita; relatório com área, produção, produtividade, custo realizado, custo/ha, custo por saca, por talhão, custo por tipo, insumos usados, fitossanidade, chuva do ano agrícola e comparação entre safras; compartilhar (WhatsApp) e PDF.

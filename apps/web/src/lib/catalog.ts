@@ -1,4 +1,4 @@
-import type { FindingKind } from "./db";
+import type { FindingKind, VisitKind } from "./db";
 
 /**
  * Catálogo preliminar de soja. Fontes públicas e nomenclatura de uso comum no campo.
@@ -24,6 +24,38 @@ export const STAGES: { code: string; label: string }[] = [
   { code: "R7", label: "R7 — Início da maturação" },
   { code: "R8", label: "R8 — Maturação plena" },
 ];
+
+/**
+ * Tipos de visita. Cada um mostra só o que importa: o plantio conta sementes no sulco, o estande
+ * conta plantas emergidas e o monitoramento anota pragas e doenças. Observações, recomendação,
+ * fotos e retorno aparecem em todos.
+ */
+export const VISIT_KINDS: {
+  kind: VisitKind;
+  label: string;
+  hint: string;
+  stageRequired: boolean;
+  findings: boolean;
+  stand: boolean;
+}[] = [
+  { kind: "monitoramento", label: "Monitoramento", hint: "Pragas, doenças e daninhas", stageRequired: true, findings: true, stand: false },
+  { kind: "plantio", label: "Plantio", hint: "Sementes por metro e distribuição no sulco", stageRequired: false, findings: false, stand: true },
+  { kind: "estande", label: "Estande", hint: "Plantas por metro e por hectare", stageRequired: false, findings: true, stand: true },
+  { kind: "pos-venda", label: "Pós-venda", hint: "Acompanhar o que foi vendido ao produtor", stageRequired: true, findings: true, stand: false },
+  { kind: "pre-colheita", label: "Pré-colheita", hint: "Maturação, perdas e ponto de colheita", stageRequired: true, findings: true, stand: false },
+  { kind: "vistoria", label: "Vistoria / perda", hint: "Laudo para seguro, Proagro ou crédito", stageRequired: true, findings: true, stand: false },
+  { kind: "outra", label: "Outra", hint: "Qualquer outro motivo de visita", stageRequired: false, findings: true, stand: false },
+];
+
+/** Selo curto da visita: o estágio ou, sem estágio (ex.: contagem de estande), o tipo. */
+export function visitBadge(v: { stage: string; kind?: VisitKind }): string {
+  return v.stage || visitKindInfo(v.kind).label;
+}
+
+/** Tipo da visita; as antigas (sem tipo) são de monitoramento. */
+export function visitKindInfo(kind: VisitKind | null | undefined) {
+  return VISIT_KINDS.find((k) => k.kind === kind) ?? VISIT_KINDS[0];
+}
 
 export const KIND_LABEL: Record<FindingKind, string> = {
   praga: "Praga",

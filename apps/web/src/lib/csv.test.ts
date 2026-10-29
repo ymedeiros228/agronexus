@@ -66,6 +66,17 @@ describe("visitRows", () => {
     expect(rows[1][14]).toBe("Monitorar");
   });
 
+  it("tipo de visita e estande no fim da linha; visita antiga é monitoramento", () => {
+    const standVisit: Visit = {
+      ...visit("v4", "2026-11-05", "s-new"),
+      kind: "estande",
+      stand: { spacingM: 0.5, targetPerHa: null, points: [{ plants: 13, meters: 1, lat: null, lng: null }] },
+    };
+    const [old, stand] = visitRows([visit("v3", "2026-11-01"), standVisit], farms, plots, seasons, []);
+    expect(old.slice(-3)).toEqual(["Monitoramento", "", ""]);
+    expect(stand.slice(-3)).toEqual(["Estande", "13", 260_000]);
+  });
+
   it("visita sem safra (backup antigo) usa a safra vigente do talhão", () => {
     const [row] = visitRows([visit("v3", "2026-11-01")], farms, plots, seasons, []);
     expect(row[6]).toBe("2026/27");
