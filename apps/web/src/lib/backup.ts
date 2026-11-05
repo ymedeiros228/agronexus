@@ -29,6 +29,7 @@ const TABLES = [
   "sales",
   "expenses",
   "clients",
+  "points",
 ] as const;
 
 type TableName = (typeof TABLES)[number];
@@ -111,6 +112,7 @@ const REQUIRED: Record<TableName | "photos", Record<string, "string" | "number" 
   sales: { seasonLabel: "string", date: "string", bags: "number", pricePerBag: "number" },
   expenses: { seasonLabel: "string", date: "string", category: "string", amount: "number" },
   clients: { name: "string" },
+  points: { farmId: "string", kind: "string", lng: "number", lat: "number" },
   photos: { visitId: "string" },
 };
 

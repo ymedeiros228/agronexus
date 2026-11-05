@@ -5,6 +5,7 @@ import type {
   Farm,
   Finding,
   FindingKind,
+  MapPoint,
   Operation,
   OperationKind,
   OperationStatus,
@@ -43,6 +44,7 @@ export type DemoData = {
   stockMoves: StockMove[];
   sales: Sale[];
   expenses: Expense[];
+  points: MapPoint[];
 };
 
 const TABLES = [
@@ -58,6 +60,7 @@ const TABLES = [
   "stockMoves",
   "sales",
   "expenses",
+  "points",
 ] as const satisfies readonly (keyof DemoData)[];
 
 /** Campos que apontam para outro registro: o que o usuário criou dentro do exemplo sai junto. */
@@ -331,7 +334,27 @@ export function buildDemo(now: number = Date.now()): DemoData {
     farmId: farmId ? ref(farmId) : null,
   }));
 
+  // Pontos em km locais, como os contornos.
+  const point = (id: string, plotId: string | null, kind: MapPoint["kind"], name: string, [x, y]: [number, number], note = ""): MapPoint => ({
+    ...base(id),
+    farmId: ref("f1"),
+    plotId: plotId ? ref(plotId) : null,
+    kind,
+    name,
+    lng: +(SL + x / KM_LNG).toFixed(6),
+    lat: +(LAT0 + y / KM_LAT).toFixed(6),
+    note,
+  });
+  const points: MapPoint[] = [
+    point("pt1", null, "sede", "Sede", [2.3, -5.3], "Galpão de máquinas e escritório"),
+    point("pt2", null, "porteira", "Porteira principal", [-0.6, -1.7], "Entrada pela MA-140"),
+    point("pt3", "p1", "armadilha", "Armadilha de percevejo 1", [1.5, -1.4]),
+    point("pt4", "p2", "amostra", "Amostra de solo A2", [4.8, -1.1], "0–20 cm, coletada na safra passada"),
+    point("pt5", "p1", "reboleira", "Reboleira de buva", [2.9, -0.4]),
+  ];
+
   return {
+    points,
     clients: [
       { ...base("c1"), name: "João Ribeiro", phone: "(99) 98877-1020", municipality: "Balsas - MA", notes: "" },
       { ...base("c2"), name: "Maria Alves", phone: "(99) 99102-3344", municipality: "Tasso Fragoso - MA", notes: "" },

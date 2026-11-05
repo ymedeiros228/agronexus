@@ -213,6 +213,21 @@ export type Expense = Base & {
   farmId?: string | null;
 };
 
+/** Tipo do ponto marcado no mapa da fazenda. */
+export type PointKind = "sede" | "porteira" | "armadilha" | "amostra" | "reboleira" | "agua" | "outro";
+
+/** Ponto marcado no mapa: sede, porteira, armadilha, amostra de solo, reboleira, água… */
+export type MapPoint = Base & {
+  farmId: string;
+  /** Talhão onde o ponto caiu (achado pelo contorno), se caiu em algum. */
+  plotId?: string | null;
+  kind: PointKind;
+  name: string;
+  lng: number;
+  lat: number;
+  note: string;
+};
+
 /** Configurações deste aparelho (não vão para o backup). */
 export type Meta = { key: string; value: unknown };
 
@@ -230,6 +245,7 @@ class AgroDB extends Dexie {
   sales!: EntityTable<Sale, "id">;
   expenses!: EntityTable<Expense, "id">;
   clients!: EntityTable<Client, "id">;
+  points!: EntityTable<MapPoint, "id">;
   meta!: EntityTable<Meta, "key">;
 
   constructor() {
@@ -322,8 +338,11 @@ class AgroDB extends Dexie {
         clients: "id, name, updatedAt, _pendente",
       })
       .upgrade(async (tx) => {
-        for (const t of SYNCED_TABLES) await tx.table(t).toCollection().modify({ _pendente: 1 });
+        // Só as tabelas que já existem na v8 (as criadas depois, como points, nascem vazias).
+        for (const t of SYNCED_TABLES) if (tx.idbtrans.db.objectStoreNames.contains(t)) await tx.table(t).toCollection().modify({ _pendente: 1 });
       });
+    // v9: pontos marcados no mapa da fazenda.
+    this.version(9).stores({ points: "id, farmId, plotId, updatedAt, _pendente" });
     markPendingOnWrite(this);
   }
 }
@@ -343,6 +362,7 @@ export const SYNCED_TABLES = [
   "sales",
   "expenses",
   "clients",
+  "points",
 ] as const;
 export type SyncedTable = (typeof SYNCED_TABLES)[number];
 
@@ -482,7 +502,7 @@ async function removeUses(operationIds: string[], mark: ReturnType<typeof gone>)
   await db.stockMoves.where("operationId").anyOf(operationIds).filter((m) => !m.deletedAt).modify(mark);
 }
 
-const PLOT_TABLES = () => [db.plots, db.seasons, db.visits, db.findings, db.photos, db.operations, db.stockMoves];
+const PLOT_TABLES = () => [db.plots, db.seasons, db.visits, db.findings, db.photos, db.operations, db.stockMoves, db.points];
 
 /** Talhões com safras, visitas (achados e fotos), operações e uso de insumo delas. Dentro de uma transação. */
 async function removePlotsCascade(plotIds: string[], mark: ReturnType<typeof gone>) {
@@ -495,9 +515,10 @@ async function removePlotsCascade(plotIds: string[], mark: ReturnType<typeof gon
   const ops = await db.operations.where("plotId").anyOf(plotIds).filter((r) => !r.deletedAt).primaryKeys();
   await db.operations.where("id").anyOf(ops).modify(mark);
   await removeUses(ops, mark);
+  await db.points.where("plotId").anyOf(plotIds).filter((r) => !r.deletedAt).modify(mark);
 }
 
-/** Remove o talhão com safras, visitas e operações (exclusão lógica). */
+/** Remove o talhão com safras, visitas, operações e pontos dele (exclusão lógica). */
 export async function removePlot(id: string): Promise<number> {
   const mark = gone();
   await db.transaction("rw", PLOT_TABLES(), () => removePlotsCascade([id], mark));
@@ -518,6 +539,7 @@ async function removeFarmCascade(id: string, mark: ReturnType<typeof gone>) {
   await db.operations.where("id").anyOf(ops).modify(mark);
   await removeUses(ops, mark);
   await db.rainfall.where("farmId").equals(id).filter((r) => !r.deletedAt).modify(mark);
+  await db.points.where("farmId").equals(id).filter((r) => !r.deletedAt).modify(mark);
   // Vendas e despesas não têm índice de fazenda; são poucas, filtra na memória.
   await db.sales.filter((r) => r.farmId === id && !r.deletedAt).modify(mark);
   await db.expenses.filter((r) => r.farmId === id && !r.deletedAt).modify(mark);

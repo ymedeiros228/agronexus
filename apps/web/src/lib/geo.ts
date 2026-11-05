@@ -196,7 +196,7 @@ export function projectShapes(rings: LngLat[][], width: number, height: number, 
   });
 }
 
-const escapeXml = (s: string) =>
+export const escapeXml = (s: string) =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
 /** Arquivo KML com os contornos (abre no Google Earth e em outros programas de mapa). */
@@ -304,4 +304,16 @@ export function tilesInView(centerP: LngLat, zoom: number, width: number, height
     }
   }
   return out;
+}
+
+/** O ponto está dentro do contorno? (raio cruzando as bordas; borda conta como dentro só por acaso) */
+export function pointInRing([x, y]: LngLat, ring: LngLat[]): boolean {
+  const pts = openRing(ring);
+  let inside = false;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const [xi, yi] = pts[i];
+    const [xj, yj] = pts[j];
+    if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
 }
