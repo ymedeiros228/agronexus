@@ -20,7 +20,7 @@ const CHOICES: { mode: Mode; icon: LucideIcon; title: string; who: string; gets:
     mode: "campo",
     icon: ClipboardList,
     title: "Vou a campo",
-    who: "Agrônomo, técnico, estagiário, RTV ou monitor",
+    who: "Agrônomo, técnico, consultor, comercial, estagiário ou monitor",
     gets: "Agenda do dia, carteira de clientes e relatório da visita com o seu nome e registro.",
   },
   {

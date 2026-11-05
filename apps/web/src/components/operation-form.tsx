@@ -7,6 +7,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { OperationIcon } from "@/components/operation-bits";
 import { SuppliesEditor, rowsFromUses, rowsToUses, validateRows, type SupplyRow } from "@/components/operation-supplies";
 import { PlotPickerFields, usePlotPicker } from "@/components/plot-picker";
+import { useMode } from "@/components/profile-bits";
 import { Button, Card, Empty, Field, LinkButton, PageTitle, inputClass } from "@/components/ui";
 import { DictationTextarea } from "@/components/dictation";
 import { toast } from "@/components/toaster";
@@ -46,7 +47,11 @@ export function OperationForm({ id, initial, initialUses, defaultFarmId, default
     );
   });
 
-  const [kind, setKind] = useState<OperationKind>(initial?.kind ?? defaultKind ?? "aplicacao");
+  // Modo campo (AT): só plantio e colheita (pedido de 04/11/2026). Quem edita um registro de outro tipo continua vendo o dele.
+  const field = useMode() === "campo";
+  const [picked, setKind] = useState<OperationKind | null>(initial?.kind ?? defaultKind ?? null);
+  const kind: OperationKind = picked ?? (field ? "plantio" : "aplicacao");
+  const kinds = field ? OPERATION_KINDS.filter((k) => k.kind === "plantio" || k.kind === "colheita" || k.kind === kind) : OPERATION_KINDS;
   const [status, setStatus] = useState<OperationStatus>(initial?.status ?? "concluida");
   const [date, setDate] = useState(initial?.date ?? today);
   const [doneDate, setDoneDate] = useState(initial?.doneDate ?? today);
@@ -146,8 +151,8 @@ export function OperationForm({ id, initial, initialUses, defaultFarmId, default
 
       <section className="space-y-2">
         <p className="text-sm font-medium">Tipo</p>
-        <div className="grid grid-cols-3 gap-2">
-          {OPERATION_KINDS.map((k) => (
+        <div className={`grid gap-2 ${kinds.length < 3 ? "grid-cols-2" : "grid-cols-3"}`}>
+          {kinds.map((k) => (
             <button
               key={k.kind}
               type="button"

@@ -5,7 +5,8 @@ import { getMeta, setMeta, type VisitAuthor } from "./db";
  * "campo" abre a agenda do dia; "gestao" abre o painel da safra.
  */
 
-export type Role = "estagiario" | "tecnico" | "engenheiro" | "monitor" | "rtv" | "produtor" | "outro";
+/** "rtv" é o valor guardado da função Comercial (nome antigo; perfis já salvos continuam valendo). */
+export type Role = "estagiario" | "tecnico" | "engenheiro" | "consultor" | "pesquisador" | "monitor" | "rtv" | "produtor" | "outro";
 export type Mode = "campo" | "gestao";
 
 export type Profile = {
@@ -22,10 +23,12 @@ export type Profile = {
 export const PROFILE_KEY = "profile";
 
 export const ROLES: { value: Role; label: string; text: string }[] = [
-  { value: "engenheiro", label: "Engenheiro(a) agrônomo(a)", text: "Consultor, da revenda, da cooperativa ou da fazenda" },
+  { value: "engenheiro", label: "Engenheiro(a) agrônomo(a)", text: "Da revenda, da cooperativa, da fazenda ou autônomo" },
+  { value: "consultor", label: "Consultor(a)", text: "Consultoria técnica, independente ou de empresa" },
   { value: "estagiario", label: "Estagiário(a) de Agronomia", text: "O relatório sai com o nome do responsável técnico" },
   { value: "tecnico", label: "Técnico(a) agrícola", text: "Técnico em agropecuária ou agrícola" },
-  { value: "rtv", label: "RTV", text: "Representante técnico de vendas" },
+  { value: "rtv", label: "Comercial", text: "RTV, CTV, DM, promotor ou gerente comercial" },
+  { value: "pesquisador", label: "Pesquisador(a)", text: "Pesquisa, ensaios e experimentos" },
   { value: "monitor", label: "Monitor(a) de pragas", text: "Faz as contagens no campo" },
   { value: "produtor", label: "Produtor(a) ou gestor(a)", text: "Dono, gerente ou administrador da fazenda" },
   { value: "outro", label: "Outra função", text: "" },
@@ -44,7 +47,7 @@ export function needsSupervisor(role: Role): boolean {
 
 /** Para quem o campo do responsável aparece (obrigatório ou não). */
 export function asksSupervisor(role: Role): boolean {
-  return role !== "engenheiro" && role !== "produtor";
+  return role !== "engenheiro" && role !== "consultor" && role !== "pesquisador" && role !== "produtor";
 }
 
 /** Registro profissional que faz sentido para a função. Vazio = não pergunta. */
@@ -54,6 +57,8 @@ export function registryLabel(role: Role): string {
       return "CREA";
     case "tecnico":
       return "Registro (CFTA/CRTA)";
+    case "consultor":
+    case "pesquisador":
     case "rtv":
     case "outro":
       return "Registro profissional (se tiver)";

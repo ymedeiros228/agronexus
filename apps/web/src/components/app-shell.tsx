@@ -123,6 +123,8 @@ const NEW_OPERATION: Action = {
   text: "Plantio, aplicação, adubação, colheita",
   icon: Tractor,
 };
+/** No modo campo, o AT só acompanha plantio e colheita (pedido da irmã do Yuri, 04/11/2026). */
+const NEW_FIELD_OPERATION: Action = { ...NEW_OPERATION, text: "Plantio e colheita" };
 const NEW_SUPPLY: Action = {
   href: "/insumos/movimento?tipo=entrada",
   label: "Entrada de insumo",
@@ -147,7 +149,7 @@ const MENUS: Record<Mode, { nav: NavItem[]; bar: (NavItem | null)[]; more: NavIt
     nav: [TODAY, CLIENTS, VISITS, FARMS, MAP, FIELD_PANEL, SEASONS, OPERATIONS, SUPPLIES, FINANCE, PROFILE, CLOUD, DATA],
     bar: [TODAY, CLIENTS, null, VISITS],
     more: [FARMS, MAP, FIELD_PANEL, SEASONS, OPERATIONS, SUPPLIES, FINANCE, PROFILE, CLOUD, DATA],
-    actions: [NEW_VISIT, NEW_CLIENT, NEW_OPERATION],
+    actions: [NEW_VISIT, NEW_CLIENT, NEW_FIELD_OPERATION],
   },
   gestao: {
     nav: [PANEL, FARMS, MAP, SEASONS, OPERATIONS, SUPPLIES, FINANCE, MONITORING, AGENDA, CLIENTS, PROFILE, CLOUD, DATA],

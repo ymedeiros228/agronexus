@@ -7,6 +7,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { ChevronRight, CloudRain, X } from "lucide-react";
 import { ClientField } from "@/components/client-bits";
 import { ShapeThumb } from "@/components/map-bits";
+import { useMode } from "@/components/profile-bits";
 import { VisitRow } from "@/components/visit-row";
 import { Button, Card, Chip, Empty, Field, inputClass, LinkButton, PageSkeleton, PageTitle, rejectField, SectionTitle } from "@/components/ui";
 import { toast } from "@/components/toaster";
@@ -29,6 +30,8 @@ function Farm() {
   const router = useRouter();
   const [plotOpen, setPlotOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  // Modo campo (AT): sem chuva, que quem vai a campo não tem como medir (pedido de 04/11/2026).
+  const field = useMode() === "campo";
 
   const data = useLiveQuery(async () => {
     const farm = await db.farms.get(id);
@@ -175,11 +178,11 @@ function Farm() {
         </Card>
       ) : null}
 
-      <dl className="grid grid-cols-3 gap-2">
+      <dl className={`grid gap-2 ${field ? "grid-cols-2" : "grid-cols-3"}`}>
         {[
           { label: plots.length === 1 ? "Talhão" : "Talhões", value: String(plots.length) },
           { label: "Área", value: totalArea ? `${formatNumberBR(totalArea, totalArea >= 1000 ? 0 : 1)} ha` : "—" },
-          { label: "Chuva 30 dias", value: `${formatNumberBR(last30, 1)} mm` },
+          ...(field ? [] : [{ label: "Chuva 30 dias", value: `${formatNumberBR(last30, 1)} mm` }]),
         ].map((stat) => (
           <div key={stat.label} className="rounded-2xl border border-border bg-surface px-3 py-2.5">
             <dt className="text-xs text-muted">{stat.label}</dt>
@@ -292,6 +295,7 @@ function Farm() {
         )}
       </section>
 
+      {field ? null : (
       <section className="space-y-3">
         <div className="flex items-center justify-between">
           <SectionTitle>Chuva</SectionTitle>
@@ -335,6 +339,7 @@ function Farm() {
           ) : null}
         </Card>
       </section>
+      )}
 
       <section className="space-y-3">
         <SectionTitle>Visitas</SectionTitle>
