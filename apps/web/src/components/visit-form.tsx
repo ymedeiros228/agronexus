@@ -143,7 +143,8 @@ export function VisitForm({ visitId, initial, seasonId, defaultFarmId, defaultPl
       return;
     }
     toast(visitId ? "Visita atualizada." : "Visita salva.");
-    router.push(`/visita?id=${id}`);
+    // Visita nova: a tela da visita abre com o relatório em destaque, pronto para mandar.
+    router.push(visitId ? `/visita?id=${id}` : `/visita?id=${id}&nova=1`);
   }
 
   if (!picker.loaded) return null;

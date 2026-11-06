@@ -3,6 +3,7 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState, type FormEvent } from "react";
 import { ClipboardList, Wheat, type LucideIcon } from "lucide-react";
+import { LogoPicker } from "@/components/logo-picker";
 import { useProfile } from "@/components/profile-bits";
 import { toast } from "@/components/toaster";
 import { Button, Card, Field, inputClass, PageSkeleton, PageTitle, SectionTitle } from "@/components/ui";
@@ -172,6 +173,8 @@ function ProfileForm({ initial }: { initial: Profile }) {
               />
             </Field>
           </div>
+
+          <LogoPicker value={p.logo} onChange={(logo) => set("logo", logo)} />
         </Card>
 
         {supervisor ? (

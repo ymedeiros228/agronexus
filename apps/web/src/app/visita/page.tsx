@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { Bug, CircleHelp, ClipboardList, MessageCircle, Microscope, Sprout, type LucideIcon } from "lucide-react";
+import { PdfButton } from "@/components/pdf-button";
 import { PhotoGallery } from "@/components/photo-viewer";
 import { Button, Card, Chip, Empty, LinkButton, PageSkeleton, SectionTitle } from "@/components/ui";
 import { toast } from "@/components/toaster";
@@ -17,6 +18,9 @@ import { authorFromProfile, getProfile, signatureLines } from "@/lib/profile";
 import { daysSince, latestSeason } from "@/lib/season";
 import { cleanStand, standReportLines, standUnit, summarizeStand } from "@/lib/stand";
 import { visitReportText } from "@/lib/visit-report";
+
+/** Código do PDF (pesado): só baixa quando a tela da visita abre, não na abertura do app. */
+const loadPdfCode = () => import("@/lib/pdf/render");
 
 export default function VisitPage() {
   return (
@@ -35,7 +39,10 @@ const FINDING_STYLE: Record<FindingKind, { icon: LucideIcon; tone: string }> = {
 };
 
 function Visit() {
-  const id = useSearchParams().get("id") ?? "";
+  const params = useSearchParams();
+  const id = params.get("id") ?? "";
+  // Acabou de salvar a visita: o relatório vem em destaque ("gerar o relatório no final").
+  const fresh = params.get("nova") === "1";
   const router = useRouter();
   const [feedback, setFeedback] = useState("");
 
@@ -87,6 +94,8 @@ function Visit() {
   const standSummary = summarizeStand(stand);
   const unit = standUnit(visit.kind);
   const signature = signatureLines(author);
+  // Muda quando algo do relatório muda: o PDF já montado fica velho.
+  const pdfVersion = [visit.updatedAt, ...findings.map((f) => f.updatedAt), ...photos.map((p) => p.updatedAt), photos.length, findings.length].join(".");
   // Com o telefone do cliente, o relatório vai direto para a conversa com ele.
   const wa = client ? whatsappLink(client.phone) : null;
 
@@ -160,12 +169,22 @@ function Visit() {
           <span className="truncate">Enviar para {client.name} no WhatsApp</span>
         </a>
       ) : null}
-      <div className="no-print grid grid-cols-3 gap-2">
-        <Button variant={wa ? "secondary" : "primary"} onClick={share}>
-          Compartilhar
-        </Button>
-        <Button variant="secondary" onClick={() => window.print()}>
-          PDF
+      <div className={`no-print ${fresh ? "space-y-2 rounded-2xl border border-brand/30 bg-brand-soft p-3" : ""}`}>
+        {fresh ? (
+          <p className="text-sm">
+            <span className="font-semibold text-brand-strong">Visita salva.</span> Agora é só montar o relatório e mandar ao produtor.
+          </p>
+        ) : null}
+        <PdfButton
+          version={pdfVersion}
+          preload={loadPdfCode}
+          primary={fresh && !wa}
+          make={async () => (await loadPdfCode()).visitPdfBlob(visit.id)}
+        />
+      </div>
+      <div className="no-print grid grid-cols-2 gap-2">
+        <Button variant="secondary" onClick={share}>
+          Compartilhar texto
         </Button>
         <LinkButton href={`/visitas/editar?id=${visit.id}`} variant="secondary">
           Editar

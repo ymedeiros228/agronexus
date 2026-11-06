@@ -18,6 +18,8 @@ export type Profile = {
   supervisorName: string;
   supervisorRegistry: string;
   mode: Mode;
+  /** Logo da empresa ou do profissional (imagem pequena em data URL). Vai no cabeçalho do PDF. */
+  logo?: string;
 };
 
 export const PROFILE_KEY = "profile";
