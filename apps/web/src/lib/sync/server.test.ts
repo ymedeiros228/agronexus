@@ -89,6 +89,7 @@ describe("papéis, tipo de conta e administrador", () => {
     for (const papel of ["leitor", "produtor", "tecnico", "estagiario"]) {
       const u = await s.newUser(`${papel}@teste.br`, { convite: "X" });
       await s.admin.query("insert into public.membros (conta_id, usuario_id, papel) values ($1, $2, $3)", [conta, u, papel]);
+      await s.admin.query("insert into public.acessos_fazenda (conta_id, usuario_id, fazenda_id) values ($1, $2, $3)", [conta, u, `f-${papel}`]);
       const tentativa = envia(u, conta, [linha(`f-${papel}`)]);
       if (papel === "leitor" || papel === "produtor") await expect(tentativa).rejects.toThrow(/sem-permissao/);
       else expect((await tentativa)[0].aceito).toBe(true);
@@ -105,7 +106,13 @@ describe("acesso por fazenda e dinheiro", () => {
     removido_em: null,
     fazenda_id: fazenda,
   });
-  const de = (tabela: string, id: string, fazenda: string | null) => ({ tabela, id, dados: { id }, atualizado_em: 1, removido_em: null, fazenda_id: fazenda });
+  const de = (tabela: string, id: string, fazenda: string | null, extra: Record<string, unknown> = {}) => ({
+    tabela,
+    id,
+    dados: { id, ...(fazenda && tabela !== "farms" ? { farmId: fazenda } : {}), ...extra },
+    atualizado_em: 1,
+    removido_em: null,
+  });
 
   let dono: string, tecnico: string, produtor: string, conta: string;
   beforeAll(async () => {
@@ -154,8 +161,24 @@ describe("acesso por fazenda e dinheiro", () => {
   it("técnico não grava venda nem registro de outra fazenda", async () => {
     await expect(envia(tecnico, conta, [de("sales", "v2", "F1")])).rejects.toThrow(/sem-permissao/);
     await expect(envia(tecnico, conta, [de("plots", "p2", "F2")])).rejects.toThrow(/sem-permissao/);
-    // Mudar a fazenda de um registro para uma que ele vê também não passa.
-    await expect(envia(tecnico, conta, [{ ...de("farms", "F2", "F1"), atualizado_em: 9 }])).rejects.toThrow(/sem-permissao/);
+    // Mentir a fazenda no lote não adianta: o servidor calcula pelo registro.
+    await expect(envia(tecnico, conta, [{ ...de("farms", "F2", null), fazenda_id: "F1", atualizado_em: 9 }])).rejects.toThrow(/sem-permissao/);
+    // Talhão sem fazenda: só quem vê tudo.
+    await expect(envia(tecnico, conta, [de("plots", "p-sem", null)])).rejects.toThrow(/sem-permissao/);
+  });
+
+  it("safra e achado herdam a fazenda do pai, no mesmo lote ou já gravado", async () => {
+    await envia(dono, conta, [de("plots", "p1", "F1"), de("seasons", "s-1", null, { plotId: "p1" })]);
+    await envia(dono, conta, [de("plots", "p2", "F2")]);
+    await envia(dono, conta, [de("seasons", "s-2", null, { plotId: "p2" })]);
+    const ids = (await recebe(tecnico, conta)).map((r) => r.id);
+    expect(ids).toContain("s-1");
+    expect(ids).not.toContain("s-2");
+  });
+
+  it("técnico que cria operação com custo não grava o custo", async () => {
+    await envia(tecnico, conta, [op("o-tec", "F1", 999)]);
+    expect((await recebe(dono, conta)).find((r) => r.id === "o-tec")!.dados).not.toHaveProperty("cost");
   });
 });
 

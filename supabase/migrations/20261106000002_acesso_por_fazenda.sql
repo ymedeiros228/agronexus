@@ -85,6 +85,14 @@ immutable
 set search_path = ''
 as $$ select tabela in ('sales', 'expenses') $$;
 
+-- Tabelas cujo registro é sempre de uma fazenda.
+create function privado.tabela_de_fazenda(tabela text)
+returns boolean
+language sql
+immutable
+set search_path = ''
+as $$ select tabela in ('farms', 'plots', 'seasons', 'visits', 'findings', 'photos', 'rainfall', 'operations', 'points') $$;
+
 create function privado.sem_custo(conta uuid, tabela text, dados jsonb)
 returns jsonb
 language sql
@@ -105,17 +113,71 @@ stable
 security definer
 set search_path = ''
 as $$
-  select privado.ve_fazenda(conta, fazenda)
+  select case
+      -- Registro que pertence a uma fazenda mas ficou sem ela (pai ainda não chegou): só quem vê tudo.
+      when fazenda is null and privado.tabela_de_fazenda(tabela) then privado.ve_tudo(conta)
+      else privado.ve_fazenda(conta, fazenda)
+    end
     and (not privado.tabela_de_dinheiro(tabela) or privado.ve_custos(conta))
 $$;
 
+-- A fazenda de cada registro é calculada aqui, nunca vem do aparelho: a fazenda é o próprio id
+-- (farms), o farmId do registro, ou a fazenda do pai (talhão da safra, visita do achado/foto),
+-- procurado primeiro no mesmo lote e depois no que já está gravado.
+create function privado.fazenda_do_lote(conta uuid, lote jsonb)
+returns table (tabela text, id text, dados jsonb, atualizado_em bigint, removido_em bigint, fazenda_id text)
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  with e as (
+    select x.tabela, x.id, x.dados, x.atualizado_em, x.removido_em
+    from jsonb_to_recordset(lote) as x (tabela text, id text, dados jsonb, atualizado_em bigint, removido_em bigint)
+  ),
+  pai as (
+    select e.*, case
+      when e.tabela = 'seasons' then 'plots'
+      when e.tabela in ('findings', 'photos') then 'visits'
+    end as pai_tabela,
+    case
+      when e.tabela = 'seasons' then e.dados ->> 'plotId'
+      when e.tabela in ('findings', 'photos') then e.dados ->> 'visitId'
+    end as pai_id
+    from e
+  )
+  select p.tabela, p.id, p.dados, p.atualizado_em, p.removido_em,
+    case
+      when p.tabela = 'farms' then p.id
+      when p.pai_tabela is not null then coalesce(
+        (select nullif(q.dados ->> 'farmId', '') from e q where q.tabela = p.pai_tabela and q.id = p.pai_id limit 1),
+        (select r.fazenda_id from public.registros r where r.conta_id = conta and r.tabela = p.pai_tabela and r.id = p.pai_id)
+      )
+      else nullif(p.dados ->> 'farmId', '')
+    end
+  from pai p
+$$;
+
+-- Registros que já estavam no servidor ganham a fazenda pela mesma regra.
+update public.registros set fazenda_id = id where tabela = 'farms';
+update public.registros set fazenda_id = nullif(dados ->> 'farmId', '')
+  where tabela in ('plots', 'visits', 'rainfall', 'operations', 'points', 'sales', 'expenses');
+update public.registros r set fazenda_id = p.fazenda_id
+  from public.registros p
+  where r.tabela = 'seasons' and p.conta_id = r.conta_id and p.tabela = 'plots' and p.id = r.dados ->> 'plotId';
+update public.registros r set fazenda_id = v.fazenda_id
+  from public.registros v
+  where r.tabela in ('findings', 'photos') and v.conta_id = r.conta_id and v.tabela = 'visits' and v.id = r.dados ->> 'visitId';
+
 revoke execute on function
   privado.ve_tudo(uuid), privado.ve_custos(uuid), privado.ve_fazenda(uuid, text),
-  privado.tabela_de_dinheiro(text), privado.sem_custo(uuid, text, jsonb), privado.pode_ver(uuid, text, text)
+  privado.tabela_de_dinheiro(text), privado.tabela_de_fazenda(text), privado.sem_custo(uuid, text, jsonb),
+  privado.pode_ver(uuid, text, text), privado.fazenda_do_lote(uuid, jsonb)
   from public, anon;
 grant execute on function
   privado.ve_tudo(uuid), privado.ve_custos(uuid), privado.ve_fazenda(uuid, text),
-  privado.tabela_de_dinheiro(text), privado.sem_custo(uuid, text, jsonb), privado.pode_ver(uuid, text, text)
+  privado.tabela_de_dinheiro(text), privado.tabela_de_fazenda(text), privado.sem_custo(uuid, text, jsonb),
+  privado.pode_ver(uuid, text, text), privado.fazenda_do_lote(uuid, jsonb)
   to authenticated;
 
 -- ---------------------------------------------------------------------------------------------
@@ -158,8 +220,8 @@ revoke execute on function public.receber_registros(uuid, timestamptz, integer) 
 grant execute on function public.receber_registros(uuid, timestamptz, integer) to authenticated;
 
 -- ---------------------------------------------------------------------------------------------
--- Enviar: mesma resposta de antes (aceito ou a versão que venceu), agora com fazenda_id no lote
--- e a permissão conferida antes de gravar. Um registro proibido recusa o lote inteiro.
+-- Enviar: mesma resposta de antes (aceito ou a versão que venceu), com a fazenda calculada no
+-- servidor e a permissão conferida antes de gravar. Um registro proibido recusa o lote inteiro.
 -- ---------------------------------------------------------------------------------------------
 
 drop function public.enviar_registros(uuid, jsonb);
@@ -188,7 +250,7 @@ begin
 
   -- O registro novo e, se já existe, o que está gravado: os dois precisam estar ao alcance.
   if exists (
-    select 1 from jsonb_to_recordset(lote) as e (tabela text, id text, fazenda_id text)
+    select 1 from privado.fazenda_do_lote(conta, lote) as e
     left join public.registros r on r.conta_id = conta and r.tabela = e.tabela and r.id = e.id
     where not privado.pode_ver(conta, e.tabela, e.fazenda_id)
        or (r.id is not null and not privado.pode_ver(conta, r.tabela, r.fazenda_id))
@@ -198,8 +260,11 @@ begin
 
   return query
   with entrada as (
-    select e.tabela, e.id, e.dados, e.atualizado_em, e.removido_em, e.fazenda_id
-    from jsonb_to_recordset(lote) as e (tabela text, id text, dados jsonb, atualizado_em bigint, removido_em bigint, fazenda_id text)
+    select e.tabela, e.id,
+      -- Quem não vê custo não grava custo.
+      case when not ve_dinheiro and e.tabela in ('operations', 'stockMoves') then e.dados - 'cost' else e.dados end as dados,
+      e.atualizado_em, e.removido_em, e.fazenda_id
+    from privado.fazenda_do_lote(conta, lote) as e
   ),
   gravados as (
     insert into public.registros as r (conta_id, tabela, id, dados, atualizado_em, removido_em, fazenda_id)
