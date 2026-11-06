@@ -18,11 +18,12 @@ export function ShapePreview({ ring, className = "h-40" }: { ring: LngLat[]; cla
 
 export type Tone = "danger" | "warn" | "ok" | "none";
 
-export const TONE: Record<Tone, { shape: string; dot: string; label: string }> = {
-  danger: { shape: "fill-danger/30 stroke-danger", dot: "bg-danger", label: "Atrasado (retorno ou operação)" },
-  warn: { shape: "fill-warn/30 stroke-warn", dot: "bg-warn", label: "Sem visita recente ou retorno hoje" },
-  ok: { shape: "fill-brand/30 stroke-brand", dot: "bg-brand", label: "Em dia" },
-  none: { shape: "fill-muted/15 stroke-muted", dot: "bg-muted", label: "Sem safra cadastrada" },
+/** `hex`: cor viva para desenhar sobre a imagem de satélite. */
+export const TONE: Record<Tone, { shape: string; dot: string; label: string; hex: string }> = {
+  danger: { hex: "#f87171", shape: "fill-danger/30 stroke-danger", dot: "bg-danger", label: "Atrasado (retorno ou operação)" },
+  warn: { hex: "#fbbf24", shape: "fill-warn/30 stroke-warn", dot: "bg-warn", label: "Sem visita recente ou retorno hoje" },
+  ok: { hex: "#4ade80", shape: "fill-brand/30 stroke-brand", dot: "bg-brand", label: "Em dia" },
+  none: { hex: "#e5e7eb", shape: "fill-muted/15 stroke-muted", dot: "bg-muted", label: "Sem safra cadastrada" },
 };
 
 /** Cor do talhão no mapa pela situação no painel. */

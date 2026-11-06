@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { CloudDownload, Crosshair, Minus, Plus } from "lucide-react";
-import { toast } from "@/components/toaster";
+import { ATTRIBUTION, MapButton, Tiles, clampZoom, pathOf, saveArea, useCanSaveOffline } from "@/components/sat-map";
 import { Button, Card, SectionTitle } from "@/components/ui";
 import {
   fitView,
@@ -11,21 +11,11 @@ import {
   perimeterM,
   polygonAreaHa,
   selfIntersects,
-  tilesInView,
   toWorld,
   type LngLat,
 } from "@/lib/geo";
 import { formatNumberBR } from "@/lib/operations";
 
-const MIN_ZOOM = 3;
-const MAX_ZOOM = 19;
-/** Imagem de satélite gratuita da Esri (exige o crédito no canto do mapa). */
-const tileUrl = (z: number, x: number, y: number) =>
-  `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${y}/${x}`;
-/** Zooms a mais e a menos que "Guardar área" baixa em volta da vista atual. */
-const SAVE_DEEPER = 2;
-const SAVE_WIDER = 2;
-const noop = () => () => {};
 /** Arrastou menos que isso: foi um toque, marca ponto. */
 const TAP_PX = 8;
 
@@ -35,7 +25,6 @@ type Gesture =
   | { kind: "pinch"; anchor: LngLat; startZoom: number; startDist: number }
   | { kind: "vertex"; index: number };
 
-const clampZoom = (z: number) => Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, z));
 const km = (m: number) => (m >= 1000 ? `${formatNumberBR(m / 1000, 2)} km` : `${formatNumberBR(m, 0)} m`);
 
 /**
@@ -63,7 +52,7 @@ export function TapDrawer({
   const [gpsError, setGpsError] = useState("");
   const [saving, setSaving] = useState<{ done: number; total: number } | null>(null);
   // Guardar para usar sem internet depende do service worker (que guarda os ladrilhos baixados).
-  const canSave = useSyncExternalStore(noop, () => !!navigator.serviceWorker?.controller, () => false);
+  const canSave = useCanSaveOffline();
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const gesture = useRef<Gesture | null>(null);
   const viewRef = useRef(view);
@@ -225,32 +214,8 @@ export function TapDrawer({
   async function saveOffline() {
     const v = viewRef.current;
     if (!v || !size || saving) return;
-    const base = Math.round(v.zoom);
-    const urls = new Set<string>();
-    for (let z = Math.max(MIN_ZOOM, base - SAVE_WIDER); z <= Math.min(MAX_ZOOM - 1, base + SAVE_DEEPER); z++) {
-      for (const t of tilesInView(v.center, z, size.w, size.h)) urls.add(tileUrl(t.z, t.x, t.y));
-    }
-    const queue = [...urls];
-    let done = 0;
-    let failed = 0;
-    setSaving({ done, total: queue.length });
-    const worker = async () => {
-      for (let url = queue.pop(); url; url = queue.pop()) {
-        try {
-          if (!(await fetch(url, { mode: "cors" })).ok) failed++;
-        } catch {
-          failed++;
-        }
-        setSaving({ done: ++done, total: urls.size });
-      }
-    };
-    await Promise.all(Array.from({ length: 6 }, worker));
+    await saveArea(v, size, (done, total) => setSaving({ done, total }));
     setSaving(null);
-    toast(
-      failed === urls.size
-        ? "Sem internet agora. Guarde a área quando tiver sinal."
-        : `Área guardada (${urls.size - failed} imagens). O mapa dessa região abre sem internet.`,
-    );
   }
 
   const area = polygonAreaHa(points);
@@ -314,7 +279,7 @@ export function TapDrawer({
             </p>
           ) : null}
           <p className="pointer-events-none absolute bottom-0 right-0 rounded-tl-md bg-black/55 px-1.5 py-0.5 text-[10px] text-white/90">
-            Imagens: Esri, Maxar, Earthstar Geographics
+            {ATTRIBUTION}
           </p>
         </div>
         {gpsError ? <p className="text-sm text-warn">{gpsError}</p> : null}
@@ -373,10 +338,6 @@ export function TapDrawer({
   );
 }
 
-function pathOf(pts: [number, number][], close: boolean) {
-  return pts.map(([x, y], i) => `${i ? "L" : "M"}${x.toFixed(1)} ${y.toFixed(1)}`).join(" ") + (close ? " Z" : "");
-}
-
 function Drawing({ pts, crossed }: { pts: [number, number][]; crossed: boolean }) {
   const color = crossed ? "#f97316" : "#facc15";
   return (
@@ -418,50 +379,6 @@ function Drawing({ pts, crossed }: { pts: [number, number][]; crossed: boolean }
           stroke="#111"
           strokeWidth={2}
           className="pointer-events-auto cursor-move"
-        />
-      ))}
-    </>
-  );
-}
-
-function MapButton({ label, onClick, children }: { label: string; onClick: () => void; children: ReactNode }) {
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      title={label}
-      onClick={onClick}
-      className="grid size-11 place-items-center rounded-xl bg-white text-[#14231a] shadow-md active:scale-95"
-    >
-      {children}
-    </button>
-  );
-}
-
-/** Ladrilhos que cobrem o quadro no zoom inteiro mais próximo, esticados para o zoom fracionado. */
-function Tiles({
-  view,
-  size,
-  onStatus,
-}: {
-  view: View;
-  size: { w: number; h: number };
-  onStatus: (s: "ok" | "fail") => void;
-}) {
-  return (
-    <>
-      {tilesInView(view.center, view.zoom, size.w, size.h).map((t) => (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          key={t.key}
-          src={tileUrl(t.z, t.x, t.y)}
-          alt=""
-          crossOrigin="anonymous"
-          draggable={false}
-          onLoad={() => onStatus("ok")}
-          onError={() => onStatus("fail")}
-          className="pointer-events-none absolute max-w-none"
-          style={{ left: t.left, top: t.top, width: t.size + 0.5, height: t.size + 0.5 }}
         />
       ))}
     </>

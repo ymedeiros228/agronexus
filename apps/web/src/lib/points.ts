@@ -1,5 +1,5 @@
 import { alive, db, newBase, type MapPoint, type Plot, type PointKind } from "./db";
-import { escapeXml, pointInRing, toKml, type ImportedShape, type LngLat } from "./geo";
+import { escapeXml, openRing as openRingOf, pointInRing, toKml, type ImportedShape, type LngLat } from "./geo";
 
 /**
  * Pontos marcados no mapa da fazenda (Etapa 4): sede, porteira, armadilha, amostra de solo,
@@ -83,4 +83,26 @@ export function farmKml(farmName: string, plots: ImportedShape[], points: MapPoi
     )
     .join("");
   return kml.replace("</Document>", `${marks}</Document>`);
+}
+
+const r7 = (n: number) => Math.round(n * 1e7) / 1e7;
+
+/** GeoJSON da fazenda: um polígono por talhão e um ponto por marcação (QGIS, CAR, outros sistemas). */
+export function farmGeoJson(plots: ImportedShape[], points: MapPoint[]): string {
+  const polygons = plots
+    .filter((s) => s.ring.length >= 3)
+    .map((s) => {
+      const ring = openRingOf(s.ring);
+      return {
+        type: "Feature",
+        properties: { name: s.name, tipo: "talhão" },
+        geometry: { type: "Polygon", coordinates: [[...ring, ring[0]].map(([lng, lat]) => [r7(lng), r7(lat)])] },
+      };
+    });
+  const marks = points.map((p) => ({
+    type: "Feature",
+    properties: { name: p.name, tipo: pointKindInfo(p.kind).label, nota: p.note },
+    geometry: { type: "Point", coordinates: [r7(p.lng), r7(p.lat)] },
+  }));
+  return JSON.stringify({ type: "FeatureCollection", features: [...polygons, ...marks] }, null, 2);
 }
