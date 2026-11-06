@@ -158,3 +158,62 @@ describe("acesso por fazenda e dinheiro", () => {
     await expect(envia(tecnico, conta, [{ ...de("farms", "F2", "F1"), atualizado_em: 9 }])).rejects.toThrow(/sem-permissao/);
   });
 });
+
+describe("convites e pessoas da conta", () => {
+  const convida = (u: string, conta: string, papel: string, fazendas: string[] = [], custos = false) =>
+    s.as(u).query<{ criar_convite: string }>("select public.criar_convite($1, $2, $3, $4)", [conta, papel, fazendas, custos]).then((r) => r[0].criar_convite);
+  const aceita = (u: string, codigo: string) => s.as(u).query("select public.aceitar_convite($1)", [codigo]);
+  const membros = (u: string, conta: string) =>
+    s.as(u).query<{ usuario_id: string; papel: string; fazendas: string[] }>("select * from public.membros_da_conta($1)", [conta]);
+
+  let dono: string, conta: string;
+  beforeAll(async () => {
+    dono = await s.newUser("dono-conv@teste.br", { nome: "Yuri" });
+    conta = await contaDe(dono);
+  });
+
+  it("convite aceito com minúscula e espaço põe a pessoa na conta com papel e fazendas", async () => {
+    const codigo = await convida(dono, conta, "tecnico", ["F1"]);
+    expect(codigo).toMatch(/^[A-HJ-NP-Z2-9]{6}$/);
+    const ana = await s.newUser("ana-conv@teste.br", { nome: "Ana", convite: codigo });
+    await aceita(ana, `  ${codigo.toLowerCase()} `);
+    const ela = (await membros(dono, conta)).find((m) => m.usuario_id === ana)!;
+    expect(ela).toMatchObject({ papel: "tecnico", fazendas: ["F1"] });
+    await expect(aceita(await s.newUser("outro-conv@teste.br"), codigo)).rejects.toThrow(/convite-usado/);
+  });
+
+  it("convite inexistente e vencido dão o erro certo", async () => {
+    const u = await s.newUser("x-conv@teste.br");
+    await expect(aceita(u, "ZZZZZZ")).rejects.toThrow(/convite-invalido/);
+    const codigo = await convida(dono, conta, "leitor");
+    await s.admin.query("update public.convites set expira_em = now() - interval '1 day' where codigo = $1", [codigo]);
+    await expect(aceita(u, codigo)).rejects.toThrow(/convite-vencido/);
+  });
+
+  it("técnico não convida; gestor não convida dono", async () => {
+    const tec = (await membros(dono, conta)).find((m) => m.papel === "tecnico")!.usuario_id;
+    await expect(convida(tec, conta, "leitor")).rejects.toThrow(/so-quem-gerencia/);
+    const gestor = await s.newUser("gestor-conv@teste.br");
+    await aceita(gestor, await convida(dono, conta, "gestor"));
+    await expect(convida(gestor, conta, "dono")).rejects.toThrow(/so-dono-convida-dono/);
+  });
+
+  it("o último dono não sai nem se rebaixa", async () => {
+    await expect(s.as(dono).query("select public.tirar_membro($1, $2)", [conta, dono])).rejects.toThrow(/ultimo-dono/);
+    await expect(s.as(dono).query("select public.mudar_membro($1, $2, 'gestor', '{}', false)", [conta, dono])).rejects.toThrow(/ultimo-dono/);
+  });
+
+  it("quem é tirado deixa de receber na hora", async () => {
+    const ze = await s.newUser("ze-conv@teste.br");
+    await aceita(ze, await convida(dono, conta, "rt"));
+    expect(await recebe(ze, conta)).toBeDefined();
+    await s.as(dono).query("select public.tirar_membro($1, $2)", [conta, ze]);
+    await expect(recebe(ze, conta)).rejects.toThrow(/sem-acesso/);
+  });
+
+  it("mudar papel troca as fazendas", async () => {
+    const tec = (await membros(dono, conta)).find((m) => m.papel === "tecnico")!.usuario_id;
+    await s.as(dono).query("select public.mudar_membro($1, $2, 'estagiario', $3, false)", [conta, tec, ["F2", "F3"]]);
+    expect((await membros(dono, conta)).find((m) => m.usuario_id === tec)).toMatchObject({ papel: "estagiario", fazendas: ["F2", "F3"] });
+  });
+});
