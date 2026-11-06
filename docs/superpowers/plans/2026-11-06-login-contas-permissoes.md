@@ -194,3 +194,13 @@
 - [ ] **Contas de administrador:** Yuri cria a conta dele pelo app publicado (senha gerada e salva no Proton Pass antes, com o passo a passo entregue na hora); depois o Claude roda `insert into privado.administradores` com o id dele. A irmã cria a dela como `autonomo`.
 - [ ] Teste real: conta do Yuri convida a irmã como `rt`, ela aceita no iPhone, grava visita sem sinal, volta o sinal, aparece no aparelho do Yuri.
 - [ ] Atualizar `supabase/README.md`, `docs/roadmap.md`, cofre.
+
+---
+
+## Pendências de segurança (revisão automática de 07/11, fazer ANTES da Task 12)
+
+Na migração `20261106000002_acesso_por_fazenda.sql`, antes de aplicar no Supabase real:
+
+1. **Filho com fazenda velha:** se um talhão (ou visita) muda de fazenda, as safras (e achados/fotos) continuam com a fazenda antiga gravada. Corrigir: ao gravar `plots`/`visits`, atualizar `fazenda_id` dos filhos no mesmo envio (ou calcular a fazenda do filho na leitura).
+2. **farmId que não bate com o talhão:** registro com `plotId`/`seasonId` (operações, visitas, pontos) usa o `farmId` que veio do aparelho; um técnico poderia gravar `farmId` da fazenda dele apontando para talhão de outra. Corrigir: tirar a fazenda do talhão referenciado (no lote ou gravado) e recusar o lote se não bater.
+3. **Matriz de papéis no servidor:** hoje o servidor só confere "pode gravar" + fazenda + dinheiro. Falta: estoque (`supplies`, `stockMoves`) só dono/gestor/rt; editar registro de outra pessoa só dono/gestor/rt (comparar com o autor gravado pelo gatilho de carimbo); assinatura só rt (ou dono com registro profissional). O resto da tabela `permissions.ts` é só interface.

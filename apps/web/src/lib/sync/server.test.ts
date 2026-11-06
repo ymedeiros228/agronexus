@@ -185,7 +185,8 @@ describe("acesso por fazenda e dinheiro", () => {
 describe("convites e pessoas da conta", () => {
   const convida = (u: string, conta: string, papel: string, fazendas: string[] = [], custos = false) =>
     s.as(u).query<{ criar_convite: string }>("select public.criar_convite($1, $2, $3, $4)", [conta, papel, fazendas, custos]).then((r) => r[0].criar_convite);
-  const aceita = (u: string, codigo: string) => s.as(u).query("select public.aceitar_convite($1)", [codigo]);
+  const aceita = (u: string, codigo: string) =>
+    s.as(u).query<{ aceitar_convite: string | null }>("select public.aceitar_convite($1)", [codigo]).then((r) => r[0].aceitar_convite);
   const membros = (u: string, conta: string) =>
     s.as(u).query<{ usuario_id: string; papel: string; fazendas: string[] }>("select * from public.membros_da_conta($1)", [conta]);
 
@@ -202,15 +203,15 @@ describe("convites e pessoas da conta", () => {
     await aceita(ana, `  ${codigo.toLowerCase()} `);
     const ela = (await membros(dono, conta)).find((m) => m.usuario_id === ana)!;
     expect(ela).toMatchObject({ papel: "tecnico", fazendas: ["F1"] });
-    await expect(aceita(await s.newUser("outro-conv@teste.br"), codigo)).rejects.toThrow(/convite-usado/);
+    expect(await aceita(await s.newUser("outro-conv@teste.br"), codigo)).toBeNull();
   });
 
-  it("convite inexistente e vencido dão o erro certo", async () => {
+  it("convite inexistente e vencido não entram (mesma resposta para tudo)", async () => {
     const u = await s.newUser("x-conv@teste.br");
-    await expect(aceita(u, "ZZZZZZ")).rejects.toThrow(/convite-invalido/);
+    expect(await aceita(u, "ZZZZZZ")).toBeNull();
     const codigo = await convida(dono, conta, "leitor");
     await s.admin.query("update public.convites set expira_em = now() - interval '1 day' where codigo = $1", [codigo]);
-    await expect(aceita(u, codigo)).rejects.toThrow(/convite-vencido/);
+    expect(await aceita(u, codigo)).toBeNull();
   });
 
   it("técnico não convida; gestor não convida dono", async () => {
@@ -243,9 +244,10 @@ describe("convites e pessoas da conta", () => {
   it("quem já é membro não aceita convite (nem o dono se rebaixa assim)", async () => {
     const outroDono = await s.newUser("dono2-conv@teste.br");
     const codigo = await convida(dono, conta, "leitor");
-    await expect(aceita(dono, codigo)).rejects.toThrow(/ja-e-membro/);
+    expect(await aceita(dono, codigo)).toBeNull();
     await aceita(outroDono, codigo);
-    await expect(aceita(outroDono, await convida(dono, conta, "dono"))).rejects.toThrow(/ja-e-membro/);
+    expect(await aceita(outroDono, await convida(dono, conta, "dono"))).toBeNull();
+    expect((await membros(dono, conta)).find((m) => m.usuario_id === dono)!.papel).toBe("dono");
   });
 
   it("convite de quem deixou de gerenciar não vale, e quem gerencia revoga", async () => {
@@ -253,12 +255,21 @@ describe("convites e pessoas da conta", () => {
     await aceita(g, await convida(dono, conta, "gestor"));
     const doGestor = await convida(g, conta, "tecnico");
     await s.as(dono).query("select public.mudar_membro($1, $2, 'leitor', '{}', false)", [conta, g]);
-    await expect(aceita(await s.newUser("y-conv@teste.br"), doGestor)).rejects.toThrow(/convite-invalido/);
+    expect(await aceita(await s.newUser("y-conv@teste.br"), doGestor)).toBeNull();
 
     const codigo = await convida(dono, conta, "leitor");
     await expect(s.as(g).query("select public.revogar_convite($1)", [codigo])).rejects.toThrow(/so-quem-gerencia/);
     await s.as(dono).query("select public.revogar_convite($1)", [codigo]);
-    await expect(aceita(await s.newUser("w-conv@teste.br"), codigo)).rejects.toThrow(/convite-invalido/);
+    expect(await aceita(await s.newUser("w-conv@teste.br"), codigo)).toBeNull();
+  });
+
+  it("5 códigos errados em uma hora bloqueiam, até com o código certo", async () => {
+    const chutador = await s.newUser("chute-conv@teste.br");
+    for (const chute of ["AAAAAA", "BBBBBB", "CCCCCC", "DDDDDD", "EEEEEE"]) expect(await aceita(chutador, chute)).toBeNull();
+    const certo = await convida(dono, conta, "leitor");
+    await expect(aceita(chutador, certo)).rejects.toThrow(/muitas-tentativas/);
+    await s.admin.query("update privado.tentativas_convite set em = now() - interval '2 hours'");
+    expect(await aceita(chutador, certo)).toBe(conta);
   });
 
   it("só quem gerencia vê os e-mails da equipe", async () => {

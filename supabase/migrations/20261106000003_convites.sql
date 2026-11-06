@@ -75,7 +75,19 @@ $$;
 -- Quem já é membro não aceita convite (mudar papel é pela tela da equipe, com as travas de
 -- dono). O convite só vale se quem criou ainda gerencia a conta (e ainda é dono, se o convite
 -- for de dono): convite de quem saiu ou foi rebaixado morre junto.
+--
+-- Contra quem tenta adivinhar código: qualquer falha devolve null (a mesma resposta para
+-- inexistente, usado, vencido ou já membro, para não revelar quais códigos existem) e conta
+-- uma tentativa; com 5 erradas na última hora a pessoa fica bloqueada até passar a hora.
+-- A falha não usa raise porque o raise desfaria o registro da tentativa.
 -- ---------------------------------------------------------------------------------------------
+
+create table privado.tentativas_convite (
+  usuario_id uuid not null references auth.users (id) on delete cascade,
+  em timestamptz not null default now()
+);
+create index on privado.tentativas_convite (usuario_id, em);
+revoke all on privado.tentativas_convite from public, anon, authenticated;
 
 create function public.aceitar_convite(codigo text)
 returns uuid
@@ -91,23 +103,23 @@ begin
   if eu is null then
     raise exception 'precisa-entrar' using errcode = '42501';
   end if;
-  select * into c from public.convites v where v.codigo = upper(replace(trim(aceitar_convite.codigo), ' ', '')) for update;
-  if not found or not exists (
-    select 1 from public.membros m
-    where m.conta_id = c.conta_id and m.usuario_id = c.criado_por
-      and (m.papel = 'dono' or (m.papel = 'gestor' and c.papel <> 'dono'))
-  ) then
-    raise exception 'convite-invalido';
-  end if;
-  if c.usado_por is not null then
-    raise exception 'convite-usado';
-  end if;
-  if c.expira_em < now() then
-    raise exception 'convite-vencido';
+  if (select count(*) from privado.tentativas_convite t
+      where t.usuario_id = eu and t.em > now() - interval '1 hour') >= 5 then
+    raise exception 'muitas-tentativas';
   end if;
 
-  if exists (select 1 from public.membros m where m.conta_id = c.conta_id and m.usuario_id = eu) then
-    raise exception 'ja-e-membro';
+  select * into c from public.convites v where v.codigo = upper(replace(trim(aceitar_convite.codigo), ' ', '')) for update;
+  if not found
+     or c.usado_por is not null
+     or c.expira_em < now()
+     or not exists (
+       select 1 from public.membros m
+       where m.conta_id = c.conta_id and m.usuario_id = c.criado_por
+         and (m.papel = 'dono' or (m.papel = 'gestor' and c.papel <> 'dono')))
+     or exists (select 1 from public.membros m where m.conta_id = c.conta_id and m.usuario_id = eu)
+  then
+    insert into privado.tentativas_convite (usuario_id) values (eu);
+    return null;
   end if;
 
   insert into public.membros (conta_id, usuario_id, papel, ve_custos)
