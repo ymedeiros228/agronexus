@@ -17,7 +17,7 @@
 - Senha mínima: 8 caracteres. O Claude não cria nem digita senha de conta real (regra do Proton Pass).
 - Papéis (valores no banco): `dono`, `gestor`, `rt` (responsável técnico), `tecnico`, `estagiario`, `produtor`, `leitor`.
 - Tipos de conta: `autonomo`, `empresa`, `produtor`.
-- Convite: código de 6 letras maiúsculas sem I, O (ex.: `KX4TPM`), validade de 7 dias, uso único.
+- Convite: código de 10 letras (ABCDE-FGHJK) maiúsculas sem I, O (ex.: `KX4TPM`), validade de 7 dias, uso único.
 - Arquivos do repositório são CRLF: editar preservando o fim de linha.
 - Migrações novas em `supabase/migrations/2026110600000X_*.sql`; nunca editar as de 28/10.
 - Publicar na Vercel só o commitado e só com autorização do Yuri.

@@ -196,11 +196,11 @@ describe("convites e pessoas da conta", () => {
     conta = await contaDe(dono);
   });
 
-  it("convite aceito com minúscula e espaço põe a pessoa na conta com papel e fazendas", async () => {
+  it("convite aceito com minúscula, hífen e espaço põe a pessoa na conta com papel e fazendas", async () => {
     const codigo = await convida(dono, conta, "tecnico", ["F1"]);
-    expect(codigo).toMatch(/^[A-HJ-NP-Z2-9]{6}$/);
+    expect(codigo).toMatch(/^[A-HJ-NP-Z2-9]{10}$/);
     const ana = await s.newUser("ana-conv@teste.br", { nome: "Ana", convite: codigo });
-    await aceita(ana, `  ${codigo.toLowerCase()} `);
+    await aceita(ana, `  ${codigo.slice(0, 5).toLowerCase()}-${codigo.slice(5)} `);
     const ela = (await membros(dono, conta)).find((m) => m.usuario_id === ana)!;
     expect(ela).toMatchObject({ papel: "tecnico", fazendas: ["F1"] });
     expect(await aceita(await s.newUser("outro-conv@teste.br"), codigo)).toBeNull();

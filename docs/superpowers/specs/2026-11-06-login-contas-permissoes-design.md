@@ -62,7 +62,7 @@ Dono → Gestor → Responsável técnico → Técnico de campo / Monitor → Es
 - `acessos_fazenda (conta_id, usuario_id, fazenda_id)`: quem vê qual fazenda, para os papéis "as atribuídas" e o produtor.
 - `registros` ganha a coluna `fazenda_id` (preenchida no envio a partir do registro ou do talhão) e RLS por fazenda.
 - Tabelas de dinheiro (`sales`, `expenses`, custo das operações) só são lidas por quem pode ver custos. O custo dentro de uma operação vai para um registro separado, para o RLS poder esconder (cabe ao construtor decidir a forma, desde que o bloqueio seja no servidor).
-- `convites (código, conta, papel, fazendas, expira_em, usado_por)`: código de 6 letras e link, validade de 7 dias, função `aceitar_convite`.
+- `convites (código, conta, papel, fazendas, expira_em, usado_por)`: código de 10 letras (ABCDE-FGHJK) e link, validade de 7 dias, função `aceitar_convite`.
 - Toda gravação guarda quem fez (`criado_por`, `alterado_por`).
 - Visita de estagiário fica "aguardando revisão" até o supervisor aprovar.
 

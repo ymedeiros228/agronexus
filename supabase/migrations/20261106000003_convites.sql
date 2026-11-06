@@ -1,11 +1,11 @@
 -- Convites e pessoas da conta (plano de 06/11/2026, Task 4).
 --
--- Dono e gestor convidam com um código de 6 letras (sem I e O, para não confundir com 1 e 0),
+-- Dono e gestor convidam com um código de 10 letras (mostrado como ABCDE-FGHJK) (sem I e O, para não confundir com 1 e 0),
 -- que vale 7 dias e uma vez só. O convite já diz o papel, as fazendas e se vê custos.
 -- A conta sempre tem pelo menos um dono.
 
 create table public.convites (
-  codigo text primary key check (codigo ~ '^[A-HJ-NP-Z2-9]{6}$'),
+  codigo text primary key check (codigo ~ '^[A-HJ-NP-Z2-9]{10}$'),
   conta_id uuid not null references public.contas (id) on delete cascade,
   papel text not null check (papel in ('dono', 'gestor', 'rt', 'tecnico', 'estagiario', 'produtor', 'leitor')),
   fazendas text[] not null default '{}',
@@ -47,6 +47,7 @@ declare
   letras constant text := 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   novo text;
   bytes bytea;
+  i integer;
 begin
   if not privado.gerencia(conta) then
     raise exception 'so-quem-gerencia' using errcode = '42501';
@@ -59,7 +60,8 @@ begin
   loop
     bytes := uuid_send(gen_random_uuid());
     novo := '';
-    for i in 0..5 loop
+    -- Bytes 6 e 8 do uuid têm bits fixos (versão e variante): ficam de fora.
+    foreach i in array array[0, 1, 2, 3, 4, 5, 9, 10, 11, 12] loop
       novo := novo || substr(letras, 1 + get_byte(bytes, i) % 32, 1);
     end loop;
     exit when not exists (select 1 from public.convites c where c.codigo = novo);
@@ -108,7 +110,7 @@ begin
     raise exception 'muitas-tentativas';
   end if;
 
-  select * into c from public.convites v where v.codigo = upper(replace(trim(aceitar_convite.codigo), ' ', '')) for update;
+  select * into c from public.convites v where v.codigo = upper(translate(aceitar_convite.codigo, ' -', '')) for update;
   if not found
      or c.usado_por is not null
      or c.expira_em < now()
@@ -143,7 +145,7 @@ set search_path = ''
 as $$
 declare
   conta uuid := (select v.conta_id from public.convites v
-                 where v.codigo = upper(replace(trim(revogar_convite.codigo), ' ', '')));
+                 where v.codigo = upper(translate(revogar_convite.codigo, ' -', '')));
 begin
   if conta is null then
     raise exception 'convite-invalido';
@@ -152,7 +154,7 @@ begin
     raise exception 'so-quem-gerencia' using errcode = '42501';
   end if;
   delete from public.convites v
-  where v.codigo = upper(replace(trim(revogar_convite.codigo), ' ', '')) and v.usado_por is null;
+  where v.codigo = upper(translate(revogar_convite.codigo, ' -', '')) and v.usado_por is null;
 end;
 $$;
 
