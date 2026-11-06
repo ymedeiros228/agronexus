@@ -46,6 +46,7 @@ as $$
 declare
   letras constant text := 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   novo text;
+  bytes bytea;
 begin
   if not privado.gerencia(conta) then
     raise exception 'so-quem-gerencia' using errcode = '42501';
@@ -53,10 +54,13 @@ begin
   if papel = 'dono' and privado.papel_em(conta) <> 'dono' then
     raise exception 'so-dono-convida-dono' using errcode = '42501';
   end if;
+  -- Sorteio forte: os bytes vêm de gen_random_uuid() (gerador criptográfico do Postgres), não de
+  -- random(). São 32 letras e 256 é múltiplo de 32, então cada letra sai com a mesma chance.
   loop
+    bytes := uuid_send(gen_random_uuid());
     novo := '';
-    for i in 1..6 loop
-      novo := novo || substr(letras, 1 + floor(random() * length(letras))::integer, 1);
+    for i in 0..5 loop
+      novo := novo || substr(letras, 1 + get_byte(bytes, i) % 32, 1);
     end loop;
     exit when not exists (select 1 from public.convites c where c.codigo = novo);
   end loop;
@@ -68,7 +72,9 @@ $$;
 
 -- ---------------------------------------------------------------------------------------------
 -- Aceitar convite: põe a pessoa na conta com o papel e as fazendas do convite.
--- Se ela já era membro, o convite novo substitui o papel e as fazendas.
+-- Quem já é membro não aceita convite (mudar papel é pela tela da equipe, com as travas de
+-- dono). O convite só vale se quem criou ainda gerencia a conta (e ainda é dono, se o convite
+-- for de dono): convite de quem saiu ou foi rebaixado morre junto.
 -- ---------------------------------------------------------------------------------------------
 
 create function public.aceitar_convite(codigo text)
@@ -86,7 +92,11 @@ begin
     raise exception 'precisa-entrar' using errcode = '42501';
   end if;
   select * into c from public.convites v where v.codigo = upper(replace(trim(aceitar_convite.codigo), ' ', '')) for update;
-  if not found then
+  if not found or not exists (
+    select 1 from public.membros m
+    where m.conta_id = c.conta_id and m.usuario_id = c.criado_por
+      and (m.papel = 'dono' or (m.papel = 'gestor' and c.papel <> 'dono'))
+  ) then
     raise exception 'convite-invalido';
   end if;
   if c.usado_por is not null then
@@ -96,16 +106,41 @@ begin
     raise exception 'convite-vencido';
   end if;
 
-  insert into public.membros (conta_id, usuario_id, papel, ve_custos)
-  values (c.conta_id, eu, c.papel, c.ve_custos)
-  on conflict (conta_id, usuario_id) do update set papel = excluded.papel, ve_custos = excluded.ve_custos;
+  if exists (select 1 from public.membros m where m.conta_id = c.conta_id and m.usuario_id = eu) then
+    raise exception 'ja-e-membro';
+  end if;
 
-  delete from public.acessos_fazenda a where a.conta_id = c.conta_id and a.usuario_id = eu;
+  insert into public.membros (conta_id, usuario_id, papel, ve_custos)
+  values (c.conta_id, eu, c.papel, c.ve_custos);
+
   insert into public.acessos_fazenda (conta_id, usuario_id, fazenda_id)
   select c.conta_id, eu, f from unnest(c.fazendas) as f;
 
   update public.convites v set usado_por = eu, usado_em = now() where v.codigo = c.codigo;
   return c.conta_id;
+end;
+$$;
+
+-- Revogar convite ainda não usado (quem gerencia a conta do convite).
+create function public.revogar_convite(codigo text)
+returns void
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $$
+declare
+  conta uuid := (select v.conta_id from public.convites v
+                 where v.codigo = upper(replace(trim(revogar_convite.codigo), ' ', '')));
+begin
+  if conta is null then
+    raise exception 'convite-invalido';
+  end if;
+  if not privado.gerencia(conta) then
+    raise exception 'so-quem-gerencia' using errcode = '42501';
+  end if;
+  delete from public.convites v
+  where v.codigo = upper(replace(trim(revogar_convite.codigo), ' ', '')) and v.usado_por is null;
 end;
 $$;
 
@@ -126,7 +161,10 @@ begin
     raise exception 'sem-acesso' using errcode = '42501';
   end if;
   return query
-    select m.usuario_id, coalesce(u.raw_user_meta_data ->> 'nome', ''), u.email::text, m.papel, m.ve_custos,
+    -- E-mail só para quem gerencia (ou o próprio): os outros veem nome e papel.
+    select m.usuario_id, coalesce(u.raw_user_meta_data ->> 'nome', ''),
+      case when privado.gerencia(conta) or m.usuario_id = (select auth.uid()) then u.email::text end,
+      m.papel, m.ve_custos,
       coalesce((select array_agg(a.fazenda_id order by a.fazenda_id) from public.acessos_fazenda a
                 where a.conta_id = m.conta_id and a.usuario_id = m.usuario_id), '{}'),
       m.criado_em
@@ -203,10 +241,10 @@ $$;
 
 revoke execute on function privado.confere_mudanca(uuid, uuid, text) from public, anon, authenticated;
 revoke execute on function
-  public.criar_convite(uuid, text, text[], boolean), public.aceitar_convite(text), public.membros_da_conta(uuid),
+  public.criar_convite(uuid, text, text[], boolean), public.aceitar_convite(text), public.revogar_convite(text), public.membros_da_conta(uuid),
   public.mudar_membro(uuid, uuid, text, text[], boolean), public.tirar_membro(uuid, uuid)
   from public, anon;
 grant execute on function
-  public.criar_convite(uuid, text, text[], boolean), public.aceitar_convite(text), public.membros_da_conta(uuid),
+  public.criar_convite(uuid, text, text[], boolean), public.aceitar_convite(text), public.revogar_convite(text), public.membros_da_conta(uuid),
   public.mudar_membro(uuid, uuid, text, text[], boolean), public.tirar_membro(uuid, uuid)
   to authenticated;

@@ -239,4 +239,35 @@ describe("convites e pessoas da conta", () => {
     await s.as(dono).query("select public.mudar_membro($1, $2, 'estagiario', $3, false)", [conta, tec, ["F2", "F3"]]);
     expect((await membros(dono, conta)).find((m) => m.usuario_id === tec)).toMatchObject({ papel: "estagiario", fazendas: ["F2", "F3"] });
   });
+
+  it("quem já é membro não aceita convite (nem o dono se rebaixa assim)", async () => {
+    const outroDono = await s.newUser("dono2-conv@teste.br");
+    const codigo = await convida(dono, conta, "leitor");
+    await expect(aceita(dono, codigo)).rejects.toThrow(/ja-e-membro/);
+    await aceita(outroDono, codigo);
+    await expect(aceita(outroDono, await convida(dono, conta, "dono"))).rejects.toThrow(/ja-e-membro/);
+  });
+
+  it("convite de quem deixou de gerenciar não vale, e quem gerencia revoga", async () => {
+    const g = await s.newUser("gestor2-conv@teste.br");
+    await aceita(g, await convida(dono, conta, "gestor"));
+    const doGestor = await convida(g, conta, "tecnico");
+    await s.as(dono).query("select public.mudar_membro($1, $2, 'leitor', '{}', false)", [conta, g]);
+    await expect(aceita(await s.newUser("y-conv@teste.br"), doGestor)).rejects.toThrow(/convite-invalido/);
+
+    const codigo = await convida(dono, conta, "leitor");
+    await expect(s.as(g).query("select public.revogar_convite($1)", [codigo])).rejects.toThrow(/so-quem-gerencia/);
+    await s.as(dono).query("select public.revogar_convite($1)", [codigo]);
+    await expect(aceita(await s.newUser("w-conv@teste.br"), codigo)).rejects.toThrow(/convite-invalido/);
+  });
+
+  it("só quem gerencia vê os e-mails da equipe", async () => {
+    const l = await s.newUser("leitor-conv@teste.br");
+    await aceita(l, await convida(dono, conta, "leitor"));
+    const vistos = await s.as(l).query<{ usuario_id: string; email: string | null }>("select * from public.membros_da_conta($1)", [conta]);
+    expect(vistos.find((m) => m.usuario_id === dono)!.email).toBeNull();
+    expect(vistos.find((m) => m.usuario_id === l)!.email).toBe("leitor-conv@teste.br");
+    const peloDono = await s.as(dono).query<{ usuario_id: string; email: string | null }>("select * from public.membros_da_conta($1)", [conta]);
+    expect(peloDono.find((m) => m.usuario_id === l)!.email).toBe("leitor-conv@teste.br");
+  });
 });
