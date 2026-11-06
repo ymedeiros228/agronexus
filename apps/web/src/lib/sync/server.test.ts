@@ -16,6 +16,9 @@ const contaDe = async (userId: string) =>
 const envia = (userId: string, conta: string, rows: unknown[]) =>
   s.as(userId).query<{ aceito: boolean }>("select * from public.enviar_registros($1, $2)", [conta, JSON.stringify(rows)]);
 
+const recebe = (userId: string | null, conta: string) =>
+  s.as(userId).query<{ tabela: string; id: string; dados: Record<string, unknown> }>("select * from public.receber_registros($1, null, 1000)", [conta]);
+
 const linha = (id: string, dados: Record<string, unknown> = {}, atualizado = 1) => ({
   tabela: "farms",
   id,
@@ -37,9 +40,11 @@ describe("contas e isolamento", () => {
     const contaA = await contaDe(a);
     expect((await envia(a, contaA, [linha("f-a")]))[0].aceito).toBe(true);
 
-    expect(await s.as(a).query("select id from public.registros where id = 'f-a'")).toHaveLength(1);
-    expect(await s.as(b).query("select id from public.registros where id = 'f-a'")).toHaveLength(0);
+    expect((await recebe(a, contaA)).map((r) => r.id)).toEqual(["f-a"]);
+    await expect(recebe(b, contaA)).rejects.toThrow(/sem-acesso/);
+    await expect(s.as(b).query("select id from public.registros")).rejects.toThrow(/permission denied/);
     await expect(s.as(null).query("select id from public.registros")).rejects.toThrow(/permission denied/);
+    await expect(recebe(null, contaA)).rejects.toThrow(/permission denied/);
   });
 
   it("vence a edição mais recente e reenviar não duplica", async () => {
@@ -49,8 +54,7 @@ describe("contas e isolamento", () => {
     const [velha] = await envia(u, conta, [linha("f-c", { name: "velha" }, 5)]);
     expect(velha.aceito).toBe(false);
     await envia(u, conta, [linha("f-c", { name: "nova" }, 10)]);
-    const rows = await s.as(u).query<{ dados: { name: string } }>("select dados from public.registros where id = 'f-c'");
-    expect(rows.map((r) => r.dados.name)).toEqual(["nova"]);
+    expect((await recebe(u, conta)).map((r) => r.dados.name)).toEqual(["nova"]);
   });
 });
 
@@ -86,8 +90,71 @@ describe("papéis, tipo de conta e administrador", () => {
       const u = await s.newUser(`${papel}@teste.br`, { convite: "X" });
       await s.admin.query("insert into public.membros (conta_id, usuario_id, papel) values ($1, $2, $3)", [conta, u, papel]);
       const tentativa = envia(u, conta, [linha(`f-${papel}`)]);
-      if (papel === "leitor" || papel === "produtor") await expect(tentativa).rejects.toThrow(/row-level security/);
+      if (papel === "leitor" || papel === "produtor") await expect(tentativa).rejects.toThrow(/sem-permissao/);
       else expect((await tentativa)[0].aceito).toBe(true);
     }
+  });
+});
+
+describe("acesso por fazenda e dinheiro", () => {
+  const op = (id: string, fazenda: string, cost: number | null, extra: Record<string, unknown> = {}, at = 1) => ({
+    tabela: "operations",
+    id,
+    dados: { id, farmId: fazenda, cost, description: "", ...extra },
+    atualizado_em: at,
+    removido_em: null,
+    fazenda_id: fazenda,
+  });
+  const de = (tabela: string, id: string, fazenda: string | null) => ({ tabela, id, dados: { id }, atualizado_em: 1, removido_em: null, fazenda_id: fazenda });
+
+  let dono: string, tecnico: string, produtor: string, conta: string;
+  beforeAll(async () => {
+    dono = await s.newUser("dono-faz@teste.br");
+    conta = await contaDe(dono);
+    tecnico = await s.newUser("tec-faz@teste.br", { convite: "X" });
+    produtor = await s.newUser("prod-faz@teste.br", { convite: "X" });
+    for (const [u, papel] of [[tecnico, "tecnico"], [produtor, "produtor"]]) {
+      await s.admin.query("insert into public.membros (conta_id, usuario_id, papel) values ($1, $2, $3)", [conta, u, papel]);
+      await s.admin.query("insert into public.acessos_fazenda (conta_id, usuario_id, fazenda_id) values ($1, $2, 'F1')", [conta, u]);
+    }
+    await envia(dono, conta, [
+      de("farms", "F1", "F1"),
+      de("farms", "F2", "F2"),
+      de("supplies", "s1", null),
+      de("sales", "v1", "F1"),
+      de("expenses", "d1", null),
+      op("o1", "F1", 5000),
+    ]);
+  });
+
+  it("técnico recebe a fazenda dele e o que é da conta toda, sem a outra fazenda nem dinheiro", async () => {
+    const rows = await recebe(tecnico, conta);
+    expect(rows.map((r) => r.id).sort()).toEqual(["F1", "o1", "s1"]);
+    expect(rows.find((r) => r.id === "o1")!.dados).not.toHaveProperty("cost");
+  });
+
+  it("produtor recebe só a fazenda atribuída", async () => {
+    expect((await recebe(produtor, conta)).map((r) => r.id).sort()).toEqual(["F1", "o1"]);
+  });
+
+  it("dono recebe tudo, com custo", async () => {
+    const rows = await recebe(dono, conta);
+    expect(rows).toHaveLength(6);
+    expect(rows.find((r) => r.id === "o1")!.dados.cost).toBe(5000);
+  });
+
+  it("técnico edita a operação sem o custo e o custo do gestor continua no servidor", async () => {
+    const semCusto = { ...op("o1", "F1", null, {}, 2), dados: { id: "o1", farmId: "F1", description: "aplicou" } };
+    const [r] = await envia(tecnico, conta, [semCusto]);
+    expect(r.aceito).toBe(true);
+    const o1 = (await recebe(dono, conta)).find((x) => x.id === "o1")!;
+    expect(o1.dados).toMatchObject({ description: "aplicou", cost: 5000 });
+  });
+
+  it("técnico não grava venda nem registro de outra fazenda", async () => {
+    await expect(envia(tecnico, conta, [de("sales", "v2", "F1")])).rejects.toThrow(/sem-permissao/);
+    await expect(envia(tecnico, conta, [de("plots", "p2", "F2")])).rejects.toThrow(/sem-permissao/);
+    // Mudar a fazenda de um registro para uma que ele vê também não passa.
+    await expect(envia(tecnico, conta, [{ ...de("farms", "F2", "F1"), atualizado_em: 9 }])).rejects.toThrow(/sem-permissao/);
   });
 });
