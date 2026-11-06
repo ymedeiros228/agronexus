@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
   Bug,
   CalendarCheck,
@@ -29,6 +29,7 @@ import {
 import type { Mode } from "@/lib/profile";
 import { CloudSync, useCloudStatus } from "./cloud-sync";
 import { DemoBanner } from "./demo-bits";
+import { demoLoaded, loadDemo } from "@/lib/demo";
 import { OnlineBadge } from "./online-badge";
 import { useMode } from "./profile-bits";
 import { Toaster } from "./toaster";
@@ -234,6 +235,17 @@ export function AppShell({ children }: { children: ReactNode }) {
   // Enquanto o modo não foi lido, o menu fica vazio (evita piscar o menu do outro modo).
   const menu = mode ? MENUS[mode] : { nav: [], bar: [undefined, undefined, null, undefined], more: [], actions: [] };
   const moreActive = menu.more.some((m) => m.match(pathname));
+
+  // Link de demonstração (`?exemplo=1`): abre já com a fazenda de exemplo, para mostrar o app preenchido.
+  // Não carrega em aparelho ligado à nuvem (lá o exemplo não convive com dados de verdade).
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (!url.searchParams.has("exemplo")) return;
+    url.searchParams.delete("exemplo");
+    window.history.replaceState(null, "", url.pathname + url.search + url.hash);
+    if (linked) return;
+    void demoLoaded().then((on) => (on ? undefined : loadDemo()));
+  }, [linked]);
 
   return (
     <div className="min-h-dvh md:pl-64 print:pl-0">
