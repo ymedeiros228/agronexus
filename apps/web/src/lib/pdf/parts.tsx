@@ -1,6 +1,7 @@
 import { Circle, Image as PdfImage, Line, Path, StyleSheet, Svg, Text, View } from "@react-pdf/renderer";
 import type { ReactNode } from "react";
 import type { FindingKind } from "../db";
+import type { FarmDrawing } from "./season-model";
 import type { InfoCell, MapDrawing } from "./visit-model";
 
 /**
@@ -62,7 +63,21 @@ export function Sprout({ size = 30 }: { size?: number }) {
   );
 }
 
-export function Header({ logo, eyebrow, title, sub, right }: { logo?: string; eyebrow: string; title: string; sub: string; right?: string }) {
+export function Header({
+  logo,
+  eyebrow,
+  title,
+  sub,
+  right,
+  rightLabel = "Data",
+}: {
+  logo?: string;
+  eyebrow: string;
+  title: string;
+  sub: string;
+  right?: string;
+  rightLabel?: string;
+}) {
   return (
     <View style={s.band}>
       <View style={s.logoBox}>{logo ? <PdfImage src={logo} style={s.logo} /> : <Sprout />}</View>
@@ -73,7 +88,7 @@ export function Header({ logo, eyebrow, title, sub, right }: { logo?: string; ey
       </View>
       {right ? (
         <View style={{ alignItems: "flex-end" }}>
-          <Text style={s.eyebrow}>Data</Text>
+          <Text style={s.eyebrow}>{rightLabel}</Text>
           <Text style={{ fontSize: 12, fontFamily: "Helvetica-Bold", marginTop: 3 }}>{right}</Text>
         </View>
       ) : null}
@@ -142,18 +157,43 @@ export function PlotMap({ map }: { map: MapDrawing }) {
       {map.points.map((p, i) => (
         <Circle key={`p${i}`} cx={p.x} cy={p.y} r={3.6} fill={p.color} stroke="#fff" strokeWidth={1} />
       ))}
-      {/* Norte */}
+      <NorthAndScale W={W} H={H} scale={map.scale} />
+    </Svg>
+  );
+}
+
+/** Norte e barra de escala, comuns aos desenhos. */
+function NorthAndScale({ W, H, scale }: { W: number; H: number; scale: { px: number; label: string } }) {
+  return (
+    <>
       <Path d={`M${W - 14} 6 L${W - 9} 20 L${W - 14} 17 L${W - 19} 20 Z`} fill={C.ink} />
       <Text x={W - 17} y={30} style={{ fontSize: 7, fontFamily: "Helvetica-Bold" }}>
         N
       </Text>
-      {/* Escala */}
-      <Line x1={8} y1={H - 8} x2={8 + map.scale.px} y2={H - 8} stroke={C.ink} strokeWidth={1.5} />
+      <Line x1={8} y1={H - 8} x2={8 + scale.px} y2={H - 8} stroke={C.ink} strokeWidth={1.5} />
       <Line x1={8} y1={H - 11} x2={8} y2={H - 5} stroke={C.ink} strokeWidth={1} />
-      <Line x1={8 + map.scale.px} y1={H - 11} x2={8 + map.scale.px} y2={H - 5} stroke={C.ink} strokeWidth={1} />
+      <Line x1={8 + scale.px} y1={H - 11} x2={8 + scale.px} y2={H - 5} stroke={C.ink} strokeWidth={1} />
       <Text x={8} y={H - 13} style={{ fontSize: 6.5 }}>
-        {map.scale.label}
+        {scale.label}
       </Text>
+    </>
+  );
+}
+
+/** Todos os talhões da safra num desenho, com o nome de cada um. */
+export function FarmMap({ map }: { map: FarmDrawing }) {
+  const { width: W, height: H } = map;
+  return (
+    <Svg width={W} height={H} viewBox={`0 0 ${W} ${H}`}>
+      {map.shapes.map((sh, i) => (
+        <Path key={`p${i}`} d={sh.path} fill="#cfe6d7" stroke={C.brand} strokeWidth={1.4} />
+      ))}
+      {map.shapes.map((sh, i) => (
+        <Text key={`t${i}`} x={sh.x} y={sh.y + 3} textAnchor="middle" style={{ fontSize: 7.5, fontFamily: "Helvetica-Bold" }} fill={C.brandDark}>
+          {sh.label}
+        </Text>
+      ))}
+      <NorthAndScale W={W} H={H} scale={map.scale} />
     </Svg>
   );
 }

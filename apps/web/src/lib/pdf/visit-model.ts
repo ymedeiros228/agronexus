@@ -7,6 +7,7 @@ import { pointKindInfo } from "../points";
 import { roleLabel, signatureLines } from "../profile";
 import { cleanStand, perHa, perMeter, standReportLines, standUnit, summarizeStand } from "../stand";
 import { fileSlug } from "../save-file";
+import { fitProjection, ringPath, scaleBar } from "./drawing";
 
 /**
  * O que vai no PDF da visita, já em texto. Sem React nem biblioteca de PDF: dá para testar
@@ -34,6 +35,7 @@ export type VisitPdfInput = {
   now?: Date;
 };
 
+export type Signature = { name: string; role: string; lines: string[]; supervisor: string };
 export type InfoCell = { label: string; value: string };
 export type FindingRow = { kind: FindingKind; kindLabel: string; name: string; amount: string; note: string };
 export type MapDrawing = {
@@ -62,11 +64,24 @@ export type VisitPdfModel = {
   followUp: string;
   map: MapDrawing | null;
   photos: PdfPhoto[];
-  signature: { name: string; role: string; lines: string[]; supervisor: string } | null;
+  signature: Signature | null;
   logo?: string;
   footer: string;
   fileName: string;
 };
+
+/** Bloco de assinatura: nome, função e registro, contato e o responsável técnico. */
+export function signatureOf(author: VisitAuthor | null): Signature | null {
+  if (!author?.name) return null;
+  return {
+    name: author.name,
+    role: [roleLabel(author.role), author.registry].filter(Boolean).join(" · "),
+    lines: signatureLines(author).slice(1).filter((l) => !l.startsWith("Sob supervisão")),
+    supervisor: author.supervisorName
+      ? `Responsável técnico: Eng. Agr. ${author.supervisorName}${author.supervisorRegistry ? `, ${author.supervisorRegistry}` : ""}`
+      : "",
+  };
+}
 
 export function visitPdfModel(input: VisitPdfInput): VisitPdfModel {
   const { visit, farm, plot, client, season, findings, dap, author, photos, points, logo } = input;
@@ -105,16 +120,7 @@ export function visitPdfModel(input: VisitPdfInput): VisitPdfModel {
       }
     : null;
 
-  const signature = author?.name
-    ? {
-        name: author.name,
-        role: [roleLabel(author.role), author.registry].filter(Boolean).join(" · "),
-        lines: signatureLines(author).slice(1).filter((l) => !l.startsWith("Sob supervisão")),
-        supervisor: author.supervisorName
-          ? `Responsável técnico: Eng. Agr. ${author.supervisorName}${author.supervisorRegistry ? `, ${author.supervisorRegistry}` : ""}`
-          : "",
-      }
-    : null;
+  const signature = signatureOf(author);
 
   const farmName = farm?.name ?? "Fazenda";
   return {
@@ -148,48 +154,19 @@ const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 const toISODate = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
-/** Escala "redonda" mais próxima de um quarto da largura do desenho. */
-function niceMeters(target: number): number {
-  const pow = 10 ** Math.floor(Math.log10(target));
-  for (const k of [5, 2, 1]) if (k * pow <= target) return k * pow;
-  return pow;
-}
-
-/**
- * Desenho do talhão em coordenadas do PDF, com norte para cima.
- * Projeção local em metros (equiretangular na latitude do talhão): na escala de um talhão o erro é desprezível.
- */
+/** Desenho do talhão em coordenadas do PDF, com norte para cima, pontos do mapa e pontos de estande com GPS. */
 export function drawPlot(ring: LngLat[], points: MapPoint[], visit: Pick<Visit, "stand">, width = 240, height = 170, pad = 14): MapDrawing {
   const pts = openRing(ring);
-  const lat0 = pts.reduce((s, p) => s + p[1], 0) / pts.length;
-  const mx = 111_320 * Math.cos((lat0 * Math.PI) / 180);
-  const my = 110_574;
-  const toM = ([lng, lat]: LngLat) => [lng * mx, lat * my] as const;
-  const ms = pts.map(toM);
-  const xs = ms.map((p) => p[0]);
-  const ys = ms.map((p) => p[1]);
-  const [minX, maxX, minY, maxY] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
-  const k = Math.min((width - 2 * pad) / Math.max(maxX - minX, 1), (height - 2 * pad) / Math.max(maxY - minY, 1));
-  const ox = (width - (maxX - minX) * k) / 2;
-  const oy = (height - (maxY - minY) * k) / 2;
-  const project = (p: LngLat) => {
-    const [x, y] = toM(p);
-    return { x: ox + (x - minX) * k, y: oy + (maxY - y) * k };
-  };
-  const path = pts.map((p, i) => {
-    const q = project(p);
-    return `${i ? "L" : "M"}${q.x.toFixed(1)} ${q.y.toFixed(1)}`;
-  }).join(" ") + " Z";
-  const scaleM = niceMeters((width / 4) / k);
+  const { project, k } = fitProjection(pts, width, height, pad);
   return {
     width,
     height,
-    path,
+    path: ringPath(pts, project),
     points: points.map((p) => ({ ...project([p.lng, p.lat]), color: pointKindInfo(p.kind).color, label: p.name })),
     stand: (visit.stand?.points ?? [])
       .filter((p) => p.lat != null && p.lng != null)
       .map((p) => project([p.lng!, p.lat!])),
-    scale: { px: scaleM * k, label: scaleM >= 1000 ? `${formatNumberBR(scaleM / 1000, 1)} km` : `${formatNumberBR(scaleM, 0)} m` },
+    scale: scaleBar(k, width),
     areaHa: polygonAreaHa(ring),
   };
 }

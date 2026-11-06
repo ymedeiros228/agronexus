@@ -1,6 +1,19 @@
 import { alive, db } from "./db";
 import type { ReportInput } from "./report";
 
+/** Muda sempre que algum registro do relatório muda: o PDF já montado fica velho. */
+export function inputVersion(input: ReportInput): string {
+  let max = 0;
+  let n = 0;
+  for (const list of Object.values(input)) {
+    for (const r of list as { updatedAt?: number }[]) {
+      n++;
+      if ((r.updatedAt ?? 0) > max) max = r.updatedAt ?? 0;
+    }
+  }
+  return `${max}.${n}`;
+}
+
 /** Carrega do aparelho tudo o que o relatório usa, só registros vivos de fazendas e talhões vivos. */
 export async function loadReportInput(): Promise<ReportInput> {
   const [farms, plots, seasons, operations, visits, findings, rainfall, supplies, stockMoves, sales, expenses] = await Promise.all([

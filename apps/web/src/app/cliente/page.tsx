@@ -7,16 +7,20 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { ChevronRight, ClipboardPlus } from "lucide-react";
 import { ClientAvatar, ClientFields, ContactButtons, clientInput } from "@/components/client-bits";
 import { ShapeThumb } from "@/components/map-bits";
+import { PdfButton } from "@/components/pdf-button";
 import { toast } from "@/components/toaster";
 import { Button, Card, Empty, LinkButton, PageSkeleton, PageTitle, SectionTitle } from "@/components/ui";
 import { VisitRow } from "@/components/visit-row";
 import { telLink, updateClient, whatsappLink } from "@/lib/clients";
 import { alive, db, removeClient, restoreRemoved } from "@/lib/db";
 import { formatDate } from "@/lib/format";
-import { formatNumberBR } from "@/lib/operations";
+import { formatNumberBR, seasonLabels } from "@/lib/operations";
 
 /** Visitas mostradas na ficha; o resto fica em Visitas. */
 const RECENT_VISITS = 6;
+
+/** Código do PDF (pesado): só baixa quando a ficha abre. */
+const loadPdfCode = () => import("@/lib/pdf/render");
 
 export default function ClientPage() {
   return (
@@ -30,6 +34,7 @@ function ClientDetail() {
   const id = useSearchParams().get("id") ?? "";
   const router = useRouter();
   const [editOpen, setEditOpen] = useState(false);
+  const [pickedLabel, setPickedLabel] = useState("");
 
   const data = useLiveQuery(async () => {
     const client = await db.clients.get(id);
@@ -41,10 +46,18 @@ function ClientDetail() {
       db.plots.where("farmId").anyOf(farmIds).toArray(),
       db.visits.where("farmId").anyOf(farmIds).toArray(),
     ]);
+    const livePlots = alive(plots);
+    const seasons = alive(await db.seasons.where("plotId").anyOf(livePlots.map((p) => p.id)).toArray());
+    const findings = await db.findings.where("visitId").anyOf(visits.map((v) => v.id)).toArray();
+    const photos = await db.photos.where("visitId").anyOf(visits.map((v) => v.id)).count();
     return {
       client: client && !client.deletedAt ? client : null,
       farms,
-      plots: alive(plots),
+      plots: livePlots,
+      // Safras do cliente, da mais nova para a mais velha.
+      labels: seasonLabels(seasons),
+      // Muda quando algo do relatório da safra muda: o PDF pronto fica velho.
+      version: [...seasons, ...visits, ...findings, ...livePlots].reduce((m, r) => Math.max(m, r.updatedAt), 0) + `.${visits.length}.${findings.length}.${photos}`,
       visits: alive(visits).sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt),
     };
   }, [id]);
@@ -79,7 +92,8 @@ function ClientDetail() {
     );
   }
 
-  const { client, farms, plots, visits } = data;
+  const { client, farms, plots, visits, labels, version } = data;
+  const label = labels.includes(pickedLabel) ? pickedLabel : (labels[0] ?? "");
   const area = plots.reduce((sum, p) => sum + (p.areaHa ?? 0), 0);
   const farmName = new Map(farms.map((f) => [f.id, f.name]));
   const plotName = new Map(plots.map((p) => [p.id, p.name]));
@@ -158,6 +172,41 @@ function ClientDetail() {
           </div>
         ))}
       </dl>
+
+      {label ? (
+        <section className="space-y-2" aria-labelledby="relatorio-safra">
+          <SectionTitle>
+            <span id="relatorio-safra">Relatório final da safra</span>
+          </SectionTitle>
+          <Card className="space-y-3">
+            <p className="text-sm text-muted">
+              Do plantio à colheita: talhões, visitas, ocorrências, recomendações e fotos, num PDF para mandar a {client.name}.
+            </p>
+            {labels.length > 1 ? (
+              <label className="block">
+                <span className="sr-only">Safra</span>
+                <select
+                  value={label}
+                  onChange={(e) => setPickedLabel(e.target.value)}
+                  className="min-h-11 w-full rounded-xl border border-border bg-surface px-3 text-sm font-medium"
+                >
+                  {labels.map((l) => (
+                    <option key={l} value={l}>
+                      Safra {l}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+            <PdfButton
+              label={`Relatório da safra ${label} em PDF`}
+              version={`${label}.${version}`}
+              preload={loadPdfCode}
+              make={async () => (await loadPdfCode()).seasonPdfBlob({ label, clientId: client.id })}
+            />
+          </Card>
+        </section>
+      ) : null}
 
       <section className="space-y-3">
         <div className="flex items-center justify-between">

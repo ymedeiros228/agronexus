@@ -10,7 +10,8 @@ import { EXPENSE_NAME } from "@/lib/finance";
 import { formatDate, plotLabel, todayISO } from "@/lib/format";
 import { KIND_NAME, formatBRL, formatNumberBR, seasonLabels } from "@/lib/operations";
 import { accountWide, farmsOfSeason, forFarm, seasonReport, type SeasonReport } from "@/lib/report";
-import { loadReportInput } from "@/lib/report-data";
+import { inputVersion, loadReportInput } from "@/lib/report-data";
+import { PdfButton } from "@/components/pdf-button";
 import { CATEGORY_NAME, formatQty } from "@/lib/stock";
 
 const sc = (n: number | null) => (n != null ? `${formatNumberBR(n, 1)} sc/ha` : "—");
@@ -45,6 +46,9 @@ function summaryText(r: SeasonReport, farms: string): string {
   ];
   return lines.filter((l) => l !== null).join("\n");
 }
+
+/** Código do PDF (pesado): só baixa quando a tela abre. */
+const loadPdfCode = () => import("@/lib/pdf/render");
 
 function Report() {
   const router = useRouter();
@@ -127,10 +131,15 @@ function Report() {
         </label>
       ) : null}
 
-      <div className="no-print grid grid-cols-2 gap-2 sm:max-w-sm">
-        <Button onClick={share}>Compartilhar</Button>
-        <Button variant="secondary" onClick={() => window.print()}>
-          PDF / imprimir
+      <div className="no-print space-y-2 sm:max-w-sm">
+        <PdfButton
+          label="Relatório final em PDF"
+          version={`${label}.${farmId}.${inputVersion(data.input)}`}
+          preload={loadPdfCode}
+          make={async () => (await loadPdfCode()).seasonPdfBlob({ label, farmId: farmId || undefined })}
+        />
+        <Button variant="secondary" className="w-full" onClick={share}>
+          Compartilhar resumo em texto
         </Button>
       </div>
       {feedback ? (

@@ -109,19 +109,20 @@ const byName = (a: string, b: string) => a.localeCompare(b, "pt-BR", { numeric: 
  * as da conta toda ficam de fora (não há rateio automático).
  * Insumos e movimentos continuam todos: o preço médio é da conta, e os usos já seguem as operações.
  */
-export function forFarm(input: ReportInput, farmId: string): ReportInput {
-  const plots = input.plots.filter((p) => p.farmId === farmId);
+export function forFarm(input: ReportInput, farmId: string | string[]): ReportInput {
+  const farmIds = new Set(Array.isArray(farmId) ? farmId : [farmId]);
+  const plots = input.plots.filter((p) => farmIds.has(p.farmId));
   const plotIds = new Set(plots.map((p) => p.id));
   return {
     ...input,
-    farms: input.farms.filter((f) => f.id === farmId),
+    farms: input.farms.filter((f) => farmIds.has(f.id)),
     plots,
     seasons: input.seasons.filter((s) => plotIds.has(s.plotId)),
     operations: input.operations.filter((o) => plotIds.has(o.plotId)),
     visits: input.visits.filter((v) => plotIds.has(v.plotId)),
-    rainfall: input.rainfall.filter((r) => r.farmId === farmId),
-    sales: input.sales.filter((s) => s.farmId === farmId),
-    expenses: input.expenses.filter((e) => e.farmId === farmId),
+    rainfall: input.rainfall.filter((r) => farmIds.has(r.farmId)),
+    sales: input.sales.filter((s) => !!s.farmId && farmIds.has(s.farmId)),
+    expenses: input.expenses.filter((e) => !!e.farmId && farmIds.has(e.farmId)),
   };
 }
 
@@ -144,6 +145,21 @@ export function accountWide(input: ReportInput, label: string) {
   };
 }
 
+/** Visitas da safra. Visita sem safra (backup antigo) conta para a safra vigente do talhão, como no painel. */
+export function visitsOfSeason(label: string, input: Pick<ReportInput, "seasons" | "visits">): Visit[] {
+  const seasonIds = new Set(input.seasons.filter((s) => s.label === label).map((s) => s.id));
+  const latestByPlot = new Map<string, Season | undefined>();
+  const seasonOfVisit = (v: Visit) => {
+    if (v.seasonId && input.seasons.some((s) => s.id === v.seasonId)) return v.seasonId;
+    if (!latestByPlot.has(v.plotId)) latestByPlot.set(v.plotId, latestSeason(input.seasons.filter((s) => s.plotId === v.plotId)));
+    return latestByPlot.get(v.plotId)?.id ?? null;
+  };
+  return input.visits.filter((v) => {
+    const sid = seasonOfVisit(v);
+    return sid !== null && seasonIds.has(sid);
+  });
+}
+
 export function seasonReport(label: string, input: ReportInput, today: string): SeasonReport {
   const farmById = new Map(input.farms.map((f) => [f.id, f]));
   const seasonsOfLabel = input.seasons.filter((s) => s.label === label);
@@ -151,17 +167,7 @@ export function seasonReport(label: string, input: ReportInput, today: string): 
   const ops = input.operations.filter((o) => o.seasonId && seasonIds.has(o.seasonId));
   const stats = seasonStats(label, input.seasons, input.plots, input.operations, today);
 
-  // Visita sem safra (backup antigo) conta para a safra vigente do talhão, como no painel.
-  const latestByPlot = new Map<string, Season | undefined>();
-  const seasonOfVisit = (v: Visit) => {
-    if (v.seasonId && input.seasons.some((s) => s.id === v.seasonId)) return v.seasonId;
-    if (!latestByPlot.has(v.plotId)) latestByPlot.set(v.plotId, latestSeason(input.seasons.filter((s) => s.plotId === v.plotId)));
-    return latestByPlot.get(v.plotId)?.id ?? null;
-  };
-  const visits = input.visits.filter((v) => {
-    const sid = seasonOfVisit(v);
-    return sid !== null && seasonIds.has(sid);
-  });
+  const visits = visitsOfSeason(label, input);
 
   const plots: PlotLine[] = [];
   for (const season of seasonsOfLabel) {

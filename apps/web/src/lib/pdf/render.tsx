@@ -2,6 +2,11 @@ import { pdf } from "@react-pdf/renderer";
 import { alive, db } from "../db";
 import { authorFromProfile, getProfile } from "../profile";
 import { daysSince, latestSeason } from "../season";
+import { farmsOfSeason, forFarm, seasonReport, visitsOfSeason } from "../report";
+import { loadReportInput } from "../report-data";
+import { formatDate, plotLabel, todayISO } from "../format";
+import { SeasonPdf } from "./season-pdf";
+import { seasonPdfModel } from "./season-model";
 import { VisitPdf } from "./visit-pdf";
 import { standHeadline, visitPdfModel, type PdfPhoto } from "./visit-model";
 
@@ -65,4 +70,63 @@ export async function visitPdfBlob(visitId: string): Promise<{ blob: Blob; fileN
   });
   const blob = await pdf(<VisitPdf m={model} headline={standHeadline(visit)} />).toBlob();
   return { blob, fileName: model.fileName, title: `${model.title} - ${model.farmName}` };
+}
+
+/** Fotos que vão no relatório da safra: no máximo 6, as com diagnóstico primeiro, em ordem de data. */
+const SEASON_PHOTOS = 6;
+
+/**
+ * Relatório final da safra. Escopo: as fazendas de um cliente, uma fazenda, ou (sem nenhum dos dois)
+ * todas as fazendas da safra, incluindo os lançamentos da conta toda.
+ */
+export async function seasonPdfBlob(opts: { label: string; clientId?: string; farmId?: string }): Promise<{ blob: Blob; fileName: string; title: string }> {
+  const { label, clientId, farmId } = opts;
+  const [full, profile, client] = await Promise.all([loadReportInput(), getProfile(), clientId ? db.clients.get(clientId) : undefined]);
+  const farmIds = clientId
+    ? full.farms.filter((f) => f.clientId === clientId).map((f) => f.id)
+    : farmId
+      ? [farmId]
+      : farmsOfSeason(full, label).map((f) => f.id);
+  const input = clientId || farmId ? forFarm(full, farmIds) : full;
+  const report = seasonReport(label, input, todayISO());
+  const visits = visitsOfSeason(label, input);
+  const visitIds = new Set(visits.map((v) => v.id));
+  const plotName = new Map(input.plots.map((p) => [p.id, plotLabel(p.name)]));
+  const visitById = new Map(visits.map((v) => [v.id, v]));
+
+  const photos = alive(await db.photos.where("visitId").anyOf([...visitIds]).toArray())
+    .sort((a, b) => Number(!!b.label.trim()) - Number(!!a.label.trim()) || a.takenAt - b.takenAt)
+    .slice(0, SEASON_PHOTOS)
+    .sort((a, b) => a.takenAt - b.takenAt);
+  const pdfPhotos: PdfPhoto[] = [];
+  for (const p of photos) {
+    const v = visitById.get(p.visitId);
+    try {
+      pdfPhotos.push({
+        src: await photoForPdf(p.blob, 1000),
+        caption: [v ? formatDate(v.date) : "", v ? plotName.get(v.plotId) : "", p.label].filter(Boolean).join(" · "),
+      });
+    } catch {
+      // Foto que o navegador não abre: fica de fora.
+    }
+  }
+
+  // Assina quem gera o relatório (perfil deste aparelho); sem perfil, quem fez a última visita da safra.
+  const lastAuthor = [...visits].sort((a, b) => b.date.localeCompare(a.date)).find((v) => v.author?.name)?.author ?? null;
+  const model = seasonPdfModel({
+    label,
+    producer: client && !client.deletedAt ? client.name : "",
+    farms: input.farms.filter((f) => farmIds.includes(f.id)),
+    plots: input.plots,
+    seasons: input.seasons,
+    visits,
+    findings: input.findings.filter((f) => visitIds.has(f.visitId)),
+    report,
+    photos: pdfPhotos,
+    author: authorFromProfile(profile) ?? lastAuthor,
+    logo: profile?.logo || undefined,
+    withFinance: profile?.mode === "gestao",
+  });
+  const blob = await pdf(<SeasonPdf m={model} />).toBlob();
+  return { blob, fileName: model.fileName, title: `${model.title} - ${model.headTitle}` };
 }
