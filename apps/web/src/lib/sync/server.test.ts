@@ -53,3 +53,41 @@ describe("contas e isolamento", () => {
     expect(rows.map((r) => r.dados.name)).toEqual(["nova"]);
   });
 });
+
+describe("papéis, tipo de conta e administrador", () => {
+  it("a conta nasce com o tipo escolhido no cadastro", async () => {
+    const u = await s.newUser("empresa@teste.br", { nome: "Ana", tipo: "empresa", empresa: "Agro Sul" });
+    const contas = await s.as(u).query("select nome, tipo, papel from public.minhas_contas()");
+    expect(contas).toEqual([{ nome: "Agro Sul", tipo: "empresa", papel: "dono" }]);
+  });
+
+  it("quem se cadastra com convite não ganha conta própria", async () => {
+    const u = await s.newUser("convidado@teste.br", { nome: "Zé", convite: "KX4TPM" });
+    expect(await s.as(u).query("select * from public.minhas_contas()")).toEqual([]);
+  });
+
+  it("só o administrador lista todas as contas", async () => {
+    const comum = await s.newUser("comum@teste.br");
+    await expect(s.as(comum).query("select * from public.admin_contas()")).rejects.toThrow(/so-admin/);
+    expect((await s.as(comum).query<{ sou_admin: boolean }>("select public.sou_admin()"))[0].sou_admin).toBe(false);
+
+    const yuri = await s.newUser("admin@teste.br");
+    await s.admin.query("insert into privado.administradores (usuario_id) values ($1)", [yuri]);
+    const todas = await s.as(yuri).query<{ conta_id: string }>("select * from public.admin_contas()");
+    expect(todas.length).toBeGreaterThanOrEqual(2);
+    // Ninguém se faz admin pela API.
+    await expect(s.as(comum).query("insert into privado.administradores (usuario_id) values ($1)", [comum])).rejects.toThrow(/permission denied/);
+  });
+
+  it("leitor e produtor não gravam; técnico e estagiário gravam", async () => {
+    const dono = await s.newUser("dono-papeis@teste.br");
+    const conta = await contaDe(dono);
+    for (const papel of ["leitor", "produtor", "tecnico", "estagiario"]) {
+      const u = await s.newUser(`${papel}@teste.br`, { convite: "X" });
+      await s.admin.query("insert into public.membros (conta_id, usuario_id, papel) values ($1, $2, $3)", [conta, u, papel]);
+      const tentativa = envia(u, conta, [linha(`f-${papel}`)]);
+      if (papel === "leitor" || papel === "produtor") await expect(tentativa).rejects.toThrow(/row-level security/);
+      else expect((await tentativa)[0].aceito).toBe(true);
+    }
+  });
+});
