@@ -1,4 +1,4 @@
-<a href="#-telas"><img src="docs/readme/hero.webp" width="100%" alt="AgroNexus rodando no notebook e no celular: painel da safra, talhões no mapa de satélite, agenda de visitas e financeiro" /></a>
+<img src="docs/readme/demo.webp" width="100%" alt="AgroNexus sendo usado: painel da safra, mapa de satélite com os talhões, agenda de visitas e financeiro" />
 
 <p align="center">
   <img src="https://img.shields.io/badge/Next.js-16-000000?style=flat-square&logo=nextdotjs" alt="Next.js 16" />
