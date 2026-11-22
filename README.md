@@ -27,7 +27,7 @@ O mesmo dado serve a duas pessoas:
 | **Vou a campo** | agrônomo, técnico, estagiário, RTV | a agenda do dia: atrasados, retornos e talhões sem visita |
 | **Cuido da fazenda** | produtor e gestor | o painel da safra: área, produtividade, custo por hectare e alertas |
 
-## 📸 Telas
+## Telas
 
 <p align="center">
   <img src="docs/readme/tela-painel.png" width="49%" alt="Painel da safra" />
